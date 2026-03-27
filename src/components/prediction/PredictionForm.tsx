@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Tournament, TournamentPrediction } from '@/types';
 import { Search, X, Save, Lock, ChevronUp, ChevronDown, Trophy, Award, Target, Zap, Star, AlertCircle, GripVertical } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
@@ -166,9 +166,9 @@ export default function PredictionForm({ tournament, existingPrediction, isLocke
   // ─── Drag-to-reorder state ───
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  const dragNodeRef = useRef<HTMLDivElement | null>(null);
   const touchStartY = useRef<number>(0);
   const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const handleDragStart = (idx: number) => {
     setDragIdx(idx);
@@ -196,33 +196,149 @@ export default function PredictionForm({ tournament, existingPrediction, isLocke
     setDragOverIdx(null);
   };
 
-  // Touch drag support
+  // Touch drag support — long press to activate, row follows finger
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchActiveRef = useRef(false);
+  const touchDragIdx = useRef<number | null>(null);
+  const touchOverIdx = useRef<number | null>(null);
+  const rowStartY = useRef<number>(0); // center Y of dragged row at start
+  const rowHeight = useRef<number>(0);
+
+  const clearAllTransforms = () => {
+    rowRefs.current.forEach((row) => {
+      if (!row) return;
+      row.style.transform = '';
+      row.style.transition = '';
+      row.style.zIndex = '';
+      row.style.boxShadow = '';
+    });
+  };
+
   const handleTouchStart = (idx: number, e: React.TouchEvent) => {
     if (isLocked) return;
     touchStartY.current = e.touches[0].clientY;
-    setDragIdx(idx);
-    setDragOverIdx(idx);
+    touchActiveRef.current = false;
+    touchDragIdx.current = null;
+    touchOverIdx.current = null;
+
+    longPressTimer.current = setTimeout(() => {
+      touchActiveRef.current = true;
+      touchDragIdx.current = idx;
+      touchOverIdx.current = idx;
+
+      const row = rowRefs.current[idx];
+      if (row) {
+        const rect = row.getBoundingClientRect();
+        rowStartY.current = rect.top + rect.height / 2;
+        rowHeight.current = rect.height;
+        // Subtle drag indicator — green border only
+        row.style.zIndex = '20';
+        row.style.boxShadow = '0 0 0 2px var(--accent)';
+        row.style.transition = 'box-shadow 0.15s ease';
+      }
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 300);
   };
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (dragIdx === null) return;
-    const touchY = e.touches[0].clientY;
-
-    // Find which row we're over
-    for (let i = 0; i < rowRefs.current.length; i++) {
-      const row = rowRefs.current[i];
-      if (!row) continue;
-      const rect = row.getBoundingClientRect();
-      if (touchY >= rect.top && touchY <= rect.bottom) {
-        setDragOverIdx(i);
-        break;
-      }
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
     }
-  }, [dragIdx]);
+  };
 
   const handleTouchEnd = () => {
-    handleDragEnd();
+    cancelLongPress();
+    if (touchActiveRef.current && touchDragIdx.current !== null) {
+      const fromIdx = touchDragIdx.current;
+      const toIdx = touchOverIdx.current;
+      clearAllTransforms();
+      if (toIdx !== null && fromIdx !== toIdx) {
+        const copy = [...ranking];
+        const [moved] = copy.splice(fromIdx, 1);
+        copy.splice(toIdx, 0, moved);
+        setRanking(copy);
+
+        const newTop4 = copy.slice(0, 4);
+        if (winner && !newTop4.includes(winner)) setWinner('');
+        if (runnerUp && !newTop4.includes(runnerUp)) setRunnerUp('');
+        setValidationError('');
+      }
+    } else {
+      clearAllTransforms();
+    }
+    touchActiveRef.current = false;
+    touchDragIdx.current = null;
+    touchOverIdx.current = null;
   };
+
+  // Non-passive touchmove — moves the dragged row with finger, shifts others
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+
+    const onTouchMove = (e: TouchEvent) => {
+      const touchY = e.touches[0].clientY;
+
+      if (!touchActiveRef.current) {
+        if (Math.abs(touchY - touchStartY.current) > 5) {
+          cancelLongPress();
+        }
+        return;
+      }
+
+      e.preventDefault();
+
+      const fromIdx = touchDragIdx.current;
+      if (fromIdx === null) return;
+
+      // Move the dragged row to follow the finger
+      const draggedRow = rowRefs.current[fromIdx];
+      if (draggedRow) {
+        const offsetY = touchY - touchStartY.current;
+        draggedRow.style.transform = `translateY(${offsetY}px)`;
+      }
+
+      // Find which slot the finger is over
+      let overIdx = fromIdx;
+      for (let i = 0; i < rowRefs.current.length; i++) {
+        const row = rowRefs.current[i];
+        if (!row || i === fromIdx) continue;
+        const rect = row.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        // Use the original positions (before transform) by checking against finger
+        if (i < fromIdx && touchY < midY + rowHeight.current * 0.3) {
+          overIdx = i;
+          break;
+        }
+        if (i > fromIdx && touchY > midY - rowHeight.current * 0.3) {
+          overIdx = i;
+        }
+      }
+
+      touchOverIdx.current = overIdx;
+
+      // Shift other rows to make room
+      for (let i = 0; i < rowRefs.current.length; i++) {
+        const row = rowRefs.current[i];
+        if (!row || i === fromIdx) continue;
+
+        row.style.transition = 'transform 0.15s ease';
+        if (fromIdx < overIdx && i > fromIdx && i <= overIdx) {
+          // Dragging down — shift these rows up
+          row.style.transform = `translateY(-${rowHeight.current}px)`;
+        } else if (fromIdx > overIdx && i >= overIdx && i < fromIdx) {
+          // Dragging up — shift these rows down
+          row.style.transform = `translateY(${rowHeight.current}px)`;
+        } else {
+          row.style.transform = 'translateY(0)';
+        }
+      }
+    };
+
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', onTouchMove);
+  }, [ranking]);
 
   const updateRuns = (idx: number, val: string) => {
     const copy = [...runs];
@@ -349,11 +465,11 @@ export default function PredictionForm({ tournament, existingPrediction, isLocke
             Points Table
           </h3>
           <span className="text-[10px] font-medium ml-auto" style={{ color: 'var(--text-muted)' }}>
-            Drag or use arrows to reorder
+            Hold to drag · arrows to reorder
           </span>
         </div>
 
-        <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+        <div ref={listRef} className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
           {ranking.map((team, idx) => {
             const color = getTeamColor(team);
             const isTopFour = idx < 4;
@@ -370,23 +486,21 @@ export default function PredictionForm({ tournament, existingPrediction, isLocke
                 onDragOver={(e) => { e.preventDefault(); handleDragOver(idx); }}
                 onDragEnd={handleDragEnd}
                 onTouchStart={(e) => handleTouchStart(idx, e)}
-                onTouchMove={handleTouchMove}
                 onTouchEnd={handleTouchEnd}
-                className={`flex items-center px-3 py-2.5 transition-all duration-150 ${!isLocked ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                onTouchCancel={handleTouchEnd}
+                className={`flex items-center px-3 py-2.5 select-none ${!isLocked ? 'cursor-grab active:cursor-grabbing' : ''}`}
                 style={{
-                  background: isDragging
-                    ? 'var(--accent-ghost)'
-                    : isTopFour
-                      ? `linear-gradient(90deg, ${color.bg}${isLight ? '25' : '10'}, transparent)`
-                      : 'var(--bg-card)',
+                  background: isTopFour
+                    ? `linear-gradient(90deg, ${color.bg}${isLight ? '25' : '10'}, transparent)`
+                    : 'var(--bg-card)',
                   borderBottom: isLast ? 'none' : '1px solid var(--border)',
-                  opacity: isDragging ? 0.5 : 1,
                   borderTop: isDragOver ? '2px solid var(--accent)' : '2px solid transparent',
+                  position: 'relative',
                 }}
               >
                 {/* Drag handle */}
                 {!isLocked && (
-                  <div className="mr-1 shrink-0 touch-none" style={{ color: 'var(--text-muted)' }}>
+                  <div className="mr-1 shrink-0 p-1 -m-1" style={{ color: 'var(--text-muted)' }}>
                     <GripVertical size={14} />
                   </div>
                 )}

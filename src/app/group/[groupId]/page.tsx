@@ -233,7 +233,6 @@ export default function GroupPage() {
   const isLocked = (() => {
     if (!group) return true;
     if (group.settings.forceLocked) return true;
-    if (myPrediction?.isLocked) return true;
     const deadline = new Date(group.settings.deadline);
     return new Date() > deadline;
   })();
