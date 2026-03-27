@@ -1,10 +1,42 @@
 'use client';
 
+import { useMemo } from 'react';
 import type { LeaderboardEntry } from '@/types';
 import { Trophy, User, TrendingUp, Zap, Award, Target, Swords } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+
+// Extracted outside to avoid remount on every parent render
+function ScoreMiniBar({ entry }: { entry: LeaderboardEntry }) {
+  const categories = [
+    { key: 'ranking', val: entry.score.ranking, label: 'Rank', color: 'var(--accent)' },
+    { key: 'winner', val: entry.score.winner + entry.score.runnerUp, label: 'W/RU', color: 'var(--gold)' },
+    { key: 'runs', val: entry.score.runs, label: 'Bat', color: '#62B4FF' },
+    { key: 'wickets', val: entry.score.wickets, label: 'Bowl', color: '#A78BFA' },
+    { key: 'mvp', val: entry.score.mvp, label: 'MVP', color: 'var(--warning)' },
+    { key: 'matches', val: entry.score.matches, label: 'Match', color: 'var(--pink)' },
+  ].filter(c => c.val > 0);
+
+  const total = entry.score.total || 1;
+
+  return (
+    <div className="flex items-center gap-0.5 h-2 w-full rounded-full overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
+      {categories.map((cat) => (
+        <div
+          key={cat.key}
+          className="h-full rounded-full transition-all duration-500"
+          style={{
+            width: `${(cat.val / total) * 100}%`,
+            background: cat.color,
+            opacity: 0.85,
+          }}
+          title={`${cat.label}: ${cat.val}`}
+        />
+      ))}
+    </div>
+  );
+}
 
 interface Props {
   entries: LeaderboardEntry[];
@@ -13,7 +45,7 @@ interface Props {
 }
 
 export default function Leaderboard({ entries, currentUserId, onUserClick }: Props) {
-  const sorted = [...entries].sort((a, b) => b.score.total - a.score.total);
+  const sorted = useMemo(() => [...entries].sort((a, b) => b.score.total - a.score.total), [entries]);
 
   if (sorted.length === 0) {
     return (
@@ -55,36 +87,7 @@ export default function Leaderboard({ entries, currentUserId, onUserClick }: Pro
   // Score bar width relative to leader
   const barWidth = (score: number) => `${Math.max((score / maxScore) * 100, 8)}%`;
 
-  // Score category breakdown mini-bar
-  const ScoreMiniBar = ({ entry, rank }: { entry: LeaderboardEntry; rank: number }) => {
-    const categories = [
-      { key: 'ranking', val: entry.score.ranking, label: 'Rank', color: 'var(--accent)' },
-      { key: 'winner', val: entry.score.winner + entry.score.runnerUp, label: 'W/RU', color: 'var(--gold)' },
-      { key: 'runs', val: entry.score.runs, label: 'Bat', color: '#62B4FF' },
-      { key: 'wickets', val: entry.score.wickets, label: 'Bowl', color: '#A78BFA' },
-      { key: 'mvp', val: entry.score.mvp, label: 'MVP', color: 'var(--warning)' },
-      { key: 'matches', val: entry.score.matches, label: 'Match', color: 'var(--pink)' },
-    ].filter(c => c.val > 0);
-
-    const total = entry.score.total || 1;
-
-    return (
-      <div className="flex items-center gap-0.5 h-2 w-full rounded-full overflow-hidden" style={{ background: 'var(--bg-primary)' }}>
-        {categories.map((cat) => (
-          <div
-            key={cat.key}
-            className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${(cat.val / total) * 100}%`,
-              background: cat.color,
-              opacity: 0.85,
-            }}
-            title={`${cat.label}: ${cat.val}`}
-          />
-        ))}
-      </div>
-    );
-  };
+  // ScoreMiniBar is now defined outside this component to prevent remounts
 
   return (
     <div className="space-y-4">
@@ -148,7 +151,7 @@ export default function Leaderboard({ entries, currentUserId, onUserClick }: Pro
 
                 {/* Mini score bar */}
                 <div className="w-full mt-2">
-                  <ScoreMiniBar entry={entry} rank={rank} />
+                  <ScoreMiniBar entry={entry} />
                 </div>
               </div>
             );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import html2canvas from 'html2canvas';
 import type { Tournament, TournamentPrediction } from '@/types';
 import { Download, Share2, X, Loader2 } from 'lucide-react';
@@ -17,13 +17,15 @@ export default function ShareCard({ prediction, tournament, groupName, onClose }
   const cardRef = useRef<HTMLDivElement>(null);
   const [generating, setGenerating] = useState(false);
 
+  const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.name, t])), [tournament.teams]);
+
   const getTeamColor = (name: string) => {
-    const team = tournament.teams.find((t) => t.name === name);
+    const team = teamMap.get(name);
     return team?.color || { bg: '#333', text: '#fff', accent: '#666' };
   };
 
   const getTeamShort = (name: string) => {
-    return tournament.teams.find((t) => t.name === name)?.shortName || name;
+    return teamMap.get(name)?.shortName || name;
   };
 
   const shareCaption = `Here are my predictions for ${tournament.name}! 🏏\n\nMade on CricPredict`;

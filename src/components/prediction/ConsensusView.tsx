@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { Tournament, TournamentPrediction } from '@/types';
 import { ChevronDown, ChevronUp, Trophy, Medal, TrendingDown, Zap, Target, Star, Users } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
@@ -27,15 +27,11 @@ export default function ConsensusView({ predictions, tournament }: Props) {
     );
   }
 
-  const getTeamColor = (name: string) => {
-    const team = tournament.teams.find((t) => t.name === name);
-    return team?.color || { bg: '#555', text: '#fff', accent: '#666' };
-  };
-
-  const getTeamShort = (name: string) => {
-    const team = tournament.teams.find((t) => t.name === name);
-    return team?.shortName || name;
-  };
+  // O(1) lookups instead of linear .find() on every call
+  const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.name, t])), [tournament.teams]);
+  const defaultColor = { bg: '#555', text: '#fff', accent: '#666' };
+  const getTeamColor = (name: string) => teamMap.get(name)?.color || defaultColor;
+  const getTeamShort = (name: string) => teamMap.get(name)?.shortName || name;
 
   const total = predictions.length;
 
@@ -43,90 +39,96 @@ export default function ConsensusView({ predictions, tournament }: Props) {
     setExpandedVoters((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // ─── Data ───
-  // Winner
-  const winnerVoters: Record<string, string[]> = {};
-  predictions.forEach((p) => {
-    if (p.winner) {
-      if (!winnerVoters[p.winner]) winnerVoters[p.winner] = [];
-      winnerVoters[p.winner].push(p.userName);
-    }
-  });
-  const winnerSorted = Object.entries(winnerVoters).sort((a, b) => b[1].length - a[1].length);
-
-  // Runner-up
-  const ruVoters: Record<string, string[]> = {};
-  predictions.forEach((p) => {
-    if (p.runnerUp) {
-      if (!ruVoters[p.runnerUp]) ruVoters[p.runnerUp] = [];
-      ruVoters[p.runnerUp].push(p.userName);
-    }
-  });
-  const ruSorted = Object.entries(ruVoters).sort((a, b) => b[1].length - a[1].length);
-
-  // Average ranking
-  const teamNames = tournament.teams.map((t) => t.name);
-  const avgRanking = teamNames
-    .map((team) => {
-      const positions = predictions
-        .map((p) => p.teamRanking.indexOf(team))
-        .filter((idx) => idx >= 0)
-        .map((idx) => idx + 1);
-      const avg = positions.length > 0 ? positions.reduce((a, b) => a + b, 0) / positions.length : 99;
-      return { team, avg, count: positions.length };
-    })
-    .sort((a, b) => a.avg - b.avg);
-
-  // Top 4 qualifiers
-  const top4Counts: Record<string, string[]> = {};
-  predictions.forEach((p) => {
-    p.teamRanking.slice(0, 4).forEach((team) => {
-      if (!top4Counts[team]) top4Counts[team] = [];
-      top4Counts[team].push(p.userName);
+  // ─── Memoized aggregation — only recalculates when predictions/tournament change ───
+  const { winnerSorted, ruSorted, avgRanking, top4Sorted, lastPlaceSorted, runsSorted, wicketsSorted, mvpSorted } = useMemo(() => {
+    // Winner
+    const winnerVoters: Record<string, string[]> = {};
+    predictions.forEach((p) => {
+      if (p.winner) {
+        if (!winnerVoters[p.winner]) winnerVoters[p.winner] = [];
+        winnerVoters[p.winner].push(p.userName);
+      }
     });
-  });
-  const top4Sorted = Object.entries(top4Counts).sort((a, b) => b[1].length - a[1].length);
 
-  // Last place
-  const lastPlaceCounts: Record<string, string[]> = {};
-  predictions.forEach((p) => {
-    const last = p.teamRanking[p.teamRanking.length - 1];
-    if (last) {
-      if (!lastPlaceCounts[last]) lastPlaceCounts[last] = [];
-      lastPlaceCounts[last].push(p.userName);
-    }
-  });
-  const lastPlaceSorted = Object.entries(lastPlaceCounts).sort((a, b) => b[1].length - a[1].length);
-
-  // Runs
-  const runsVoters: Record<string, string[]> = {};
-  predictions.forEach((p) => {
-    p.runs.filter(Boolean).forEach((player) => {
-      if (!runsVoters[player]) runsVoters[player] = [];
-      if (!runsVoters[player].includes(p.userName)) runsVoters[player].push(p.userName);
+    // Runner-up
+    const ruVoters: Record<string, string[]> = {};
+    predictions.forEach((p) => {
+      if (p.runnerUp) {
+        if (!ruVoters[p.runnerUp]) ruVoters[p.runnerUp] = [];
+        ruVoters[p.runnerUp].push(p.userName);
+      }
     });
-  });
-  const runsSorted = Object.entries(runsVoters).sort((a, b) => b[1].length - a[1].length).slice(0, 8);
 
-  // Wickets
-  const wicketsVoters: Record<string, string[]> = {};
-  predictions.forEach((p) => {
-    p.wickets.filter(Boolean).forEach((player) => {
-      if (!wicketsVoters[player]) wicketsVoters[player] = [];
-      if (!wicketsVoters[player].includes(p.userName)) wicketsVoters[player].push(p.userName);
+    // Average ranking
+    const teamNames = tournament.teams.map((t) => t.name);
+    const avgRank = teamNames
+      .map((team) => {
+        const positions = predictions
+          .map((p) => p.teamRanking.indexOf(team))
+          .filter((idx) => idx >= 0)
+          .map((idx) => idx + 1);
+        const avg = positions.length > 0 ? positions.reduce((a, b) => a + b, 0) / positions.length : 99;
+        return { team, avg, count: positions.length };
+      })
+      .sort((a, b) => a.avg - b.avg);
+
+    // Top 4 qualifiers
+    const top4Counts: Record<string, string[]> = {};
+    predictions.forEach((p) => {
+      p.teamRanking.slice(0, 4).forEach((team) => {
+        if (!top4Counts[team]) top4Counts[team] = [];
+        top4Counts[team].push(p.userName);
+      });
     });
-  });
-  const wicketsSorted = Object.entries(wicketsVoters).sort((a, b) => b[1].length - a[1].length).slice(0, 8);
 
-  // MVP
-  const mvpVoters: Record<string, string[]> = {};
-  predictions.forEach((p) => {
-    if (p.mvp) {
-      if (!mvpVoters[p.mvp]) mvpVoters[p.mvp] = [];
-      mvpVoters[p.mvp].push(p.userName);
-    }
-  });
-  const mvpSorted = Object.entries(mvpVoters).sort((a, b) => b[1].length - a[1].length).slice(0, 5);
+    // Last place
+    const lastPlaceCounts: Record<string, string[]> = {};
+    predictions.forEach((p) => {
+      const last = p.teamRanking[p.teamRanking.length - 1];
+      if (last) {
+        if (!lastPlaceCounts[last]) lastPlaceCounts[last] = [];
+        lastPlaceCounts[last].push(p.userName);
+      }
+    });
+
+    // Runs
+    const runsVoters: Record<string, string[]> = {};
+    predictions.forEach((p) => {
+      p.runs.filter(Boolean).forEach((player) => {
+        if (!runsVoters[player]) runsVoters[player] = [];
+        if (!runsVoters[player].includes(p.userName)) runsVoters[player].push(p.userName);
+      });
+    });
+
+    // Wickets
+    const wicketsVoters: Record<string, string[]> = {};
+    predictions.forEach((p) => {
+      p.wickets.filter(Boolean).forEach((player) => {
+        if (!wicketsVoters[player]) wicketsVoters[player] = [];
+        if (!wicketsVoters[player].includes(p.userName)) wicketsVoters[player].push(p.userName);
+      });
+    });
+
+    // MVP
+    const mvpVoters: Record<string, string[]> = {};
+    predictions.forEach((p) => {
+      if (p.mvp) {
+        if (!mvpVoters[p.mvp]) mvpVoters[p.mvp] = [];
+        mvpVoters[p.mvp].push(p.userName);
+      }
+    });
+
+    return {
+      winnerSorted: Object.entries(winnerVoters).sort((a, b) => b[1].length - a[1].length),
+      ruSorted: Object.entries(ruVoters).sort((a, b) => b[1].length - a[1].length),
+      avgRanking: avgRank,
+      top4Sorted: Object.entries(top4Counts).sort((a, b) => b[1].length - a[1].length),
+      lastPlaceSorted: Object.entries(lastPlaceCounts).sort((a, b) => b[1].length - a[1].length),
+      runsSorted: Object.entries(runsVoters).sort((a, b) => b[1].length - a[1].length).slice(0, 8),
+      wicketsSorted: Object.entries(wicketsVoters).sort((a, b) => b[1].length - a[1].length).slice(0, 8),
+      mvpSorted: Object.entries(mvpVoters).sort((a, b) => b[1].length - a[1].length).slice(0, 5),
+    };
+  }, [predictions, tournament]);
 
   // Most controversial pick — smallest majority for winner
   const controversialTeam = winnerSorted.length >= 2
@@ -323,7 +325,7 @@ export default function ConsensusView({ predictions, tournament }: Props) {
                   <div
                     className="h-full rounded-full"
                     style={{
-                      width: `${Math.max(100 - ((avg - 1) / (teamNames.length - 1)) * 100, 8)}%`,
+                      width: `${Math.max(100 - ((avg - 1) / (tournament.teams.length - 1)) * 100, 8)}%`,
                       background: `${color.bg}88`,
                     }}
                   />

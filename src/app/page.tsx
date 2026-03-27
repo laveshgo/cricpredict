@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { getTournaments, getUserGroups } from '@/lib/firestore';
 import { getAllUserFantasyLeagues } from '@/lib/fantasy-firestore';
-import { seedIPL2026 } from '@/lib/seed';
+// seedIPL2026 is dynamically imported below to avoid shipping seed data in production bundle
 import type { Tournament, Group } from '@/types';
 import type { FantasyLeague } from '@/types/fantasy';
 import Link from 'next/link';
@@ -139,35 +139,46 @@ function GroupSkeleton() {
 export default function HomePage() {
   const { user, profile, loading: authLoading } = useAuth();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [tournamentsLoading, setTournamentsLoading] = useState(true);
   const [myGroups, setMyGroups] = useState<Group[]>([]);
   const [myFantasyLeagues, setMyFantasyLeagues] = useState<FantasyLeague[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [userDataLoading, setUserDataLoading] = useState(true);
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const ts = await getTournaments();
-      setTournaments(ts);
-      if (user) {
-        const [gs, fls] = await Promise.all([
-          getUserGroups(user.uid),
-          getAllUserFantasyLeagues(user.uid),
-        ]);
+  // Fetch tournaments immediately — no auth needed, don't wait for it
+  useEffect(() => {
+    getTournaments()
+      .then(setTournaments)
+      .catch((err) => console.error('Failed to load tournaments:', err))
+      .finally(() => setTournamentsLoading(false));
+  }, []);
+
+  // Fetch user-specific data once auth resolves
+  const loadedUserRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setUserDataLoading(false);
+      return;
+    }
+    // Prevent duplicate loads for same user
+    if (loadedUserRef.current === user.uid) return;
+    loadedUserRef.current = user.uid;
+
+    setUserDataLoading(true);
+    Promise.all([
+      getUserGroups(user.uid),
+      getAllUserFantasyLeagues(user.uid),
+    ])
+      .then(([gs, fls]) => {
         setMyGroups(gs);
         setMyFantasyLeagues(fls);
-      }
-    } catch (err) {
-      console.error('Failed to load data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!authLoading && user) loadData();
-    if (!authLoading && !user) setLoading(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps — loadData is re-created each render; deps already cover user & authLoading
+      })
+      .catch((err) => console.error('Failed to load user data:', err))
+      .finally(() => setUserDataLoading(false));
   }, [authLoading, user]);
+
+  // Tournaments show as soon as they load; user sections show their own loading state
+  const loading = tournamentsLoading;
 
   // Hero section for signed-out users
   if (!authLoading && !user) {
@@ -221,8 +232,10 @@ export default function HomePage() {
                 <Button
                   onClick={async () => {
                     try {
+                      const { seedIPL2026 } = await import('@/lib/seed');
                       await seedIPL2026(user.uid);
-                      loadData();
+                      const ts = await getTournaments();
+                      setTournaments(ts);
                     } catch (err) {
                       console.error('Seed failed:', err);
                     }
@@ -263,7 +276,7 @@ export default function HomePage() {
 
             <div className="h-px bg-[var(--border)]" />
 
-            {loading ? (
+            {userDataLoading ? (
               <div className="p-4 space-y-3">
                 {[1, 2].map(i => <GroupSkeleton key={i} />)}
               </div>
@@ -327,7 +340,7 @@ export default function HomePage() {
 
             <div className="h-px bg-[var(--border)]" />
 
-            {loading ? (
+            {userDataLoading ? (
               <div className="p-4 space-y-3">
                 {[1, 2].map(i => <GroupSkeleton key={i} />)}
               </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import type { Tournament, TournamentPrediction } from '@/types';
 import { Search, X, Save, Lock, ChevronUp, ChevronDown, Trophy, Award, Target, Zap, Star, AlertCircle, GripVertical } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
@@ -390,14 +390,11 @@ export default function PredictionForm({ tournament, existingPrediction, isLocke
     onSave({ teamRanking: ranking, winner, runnerUp, runs, wickets, mvp });
   };
 
-  const getTeamColor = (name: string) => {
-    const team = tournament.teams.find((t) => t.name === name);
-    return team?.color || { bg: 'var(--bg-hover)', text: 'var(--text-primary)', accent: '#666' };
-  };
-
-  const getTeamShort = (name: string) => {
-    return tournament.teams.find((t) => t.name === name)?.shortName || name;
-  };
+  // O(1) lookups instead of linear .find() on every call
+  const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.name, t])), [tournament.teams]);
+  const defaultColor = { bg: 'var(--bg-hover)', text: 'var(--text-primary)', accent: '#666' };
+  const getTeamColor = (name: string) => teamMap.get(name)?.color || defaultColor;
+  const getTeamShort = (name: string) => teamMap.get(name)?.shortName || name;
 
   // Progress indicator
   const filledFields = [

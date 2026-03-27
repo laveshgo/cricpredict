@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import type { TournamentPrediction, ActualResults, Tournament, ScoreBreakdown as ScoreBreakdownType } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Check, X } from 'lucide-react';
@@ -13,13 +14,15 @@ interface Props {
 }
 
 export default function ScoreBreakdownView({ prediction, actualResults, tournament, score, isCompare }: Props) {
+  const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.name, t])), [tournament.teams]);
+
   const getTeamColor = (name: string) => {
-    const team = tournament.teams.find((t) => t.name === name);
+    const team = teamMap.get(name);
     return team?.color || { bg: '#333', text: '#fff', accent: '#666' };
   };
 
   const getTeamShort = (name: string) => {
-    return tournament.teams.find((t) => t.name === name)?.shortName || name;
+    return teamMap.get(name)?.shortName || name;
   };
 
   const MatchIcon = ({ match }: { match: boolean }) =>

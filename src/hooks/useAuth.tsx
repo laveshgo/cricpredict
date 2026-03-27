@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useRef, useMemo, useCallback, ReactNode } from 'react';
 import {
   User,
   onAuthStateChanged,
@@ -288,7 +288,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return masked;
   };
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     try {
       await firebaseSignOut(auth);
       setProfile(null);
@@ -296,32 +296,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Sign-out error:', error);
     }
-  };
+  }, []);
 
-  const reloadProfile = async () => {
+  const reloadProfile = useCallback(async () => {
     if (user) {
       await loadProfile(user);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  const value = useMemo(() => ({
+    user,
+    profile,
+    loading,
+    needsUsername,
+    signInWithGoogle,
+    signInWithUsernamePassword,
+    signUpWithUsername,
+    signUpWithEmailPassword,
+    sendEmailOTP,
+    completeEmailOTP,
+    forgotPasswordByUsername,
+    signOut,
+    reloadProfile,
+  }), [user, profile, loading, needsUsername, signOut, reloadProfile]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        profile,
-        loading,
-        needsUsername,
-        signInWithGoogle,
-        signInWithUsernamePassword,
-        signUpWithUsername,
-        signUpWithEmailPassword,
-        sendEmailOTP,
-        completeEmailOTP,
-        forgotPasswordByUsername,
-        signOut,
-        reloadProfile,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

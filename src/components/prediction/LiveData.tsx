@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import type { Tournament, ActualResults } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,14 +16,15 @@ interface Props {
 }
 
 export default function LiveData({ tournament, actualResults, onRefresh, isRefreshing, lastCacheStatus }: Props) {
+  const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.name, t])), [tournament.teams]);
+
   const getTeamColor = (name: string) => {
-    const team = tournament.teams.find((t) => t.name === name);
+    const team = teamMap.get(name);
     return team?.color || { bg: '#333', text: '#fff', accent: '#666' };
   };
 
   const getTeamShort = (name: string) => {
-    const team = tournament.teams.find((t) => t.name === name);
-    return team?.shortName || name;
+    return teamMap.get(name)?.shortName || name;
   };
 
   // Empty state

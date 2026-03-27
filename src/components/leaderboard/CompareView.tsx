@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import type { TournamentPrediction, ActualResults, Tournament, ScoreBreakdown } from '@/types';
 import { Fragment } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -16,12 +17,14 @@ export default function CompareView({ predictions, scores, actualResults, tourna
   const [predA, predB] = predictions;
   const [scoreA, scoreB] = scores;
 
+  const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.name, t])), [tournament.teams]);
+
   const getTeamShort = (name: string) => {
-    return tournament.teams.find((t) => t.name === name)?.shortName || name;
+    return teamMap.get(name)?.shortName || name;
   };
 
   const getTeamColor = (name: string) => {
-    return tournament.teams.find((t) => t.name === name)?.color || { bg: '#333', text: '#fff', accent: '#666' };
+    return teamMap.get(name)?.color || { bg: '#333', text: '#fff', accent: '#666' };
   };
 
   const categories = [

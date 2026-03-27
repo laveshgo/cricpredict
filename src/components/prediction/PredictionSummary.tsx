@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import type { Tournament, TournamentPrediction } from '@/types';
 import { Trophy, Target, Award, Zap, Star } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
@@ -14,14 +15,15 @@ interface Props {
 export default function PredictionSummary({ prediction, tournament, isCurrentUser }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
+  const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.name, t])), [tournament.teams]);
+
   const getTeamColor = (name: string) => {
-    const team = tournament.teams.find((t) => t.name === name);
+    const team = teamMap.get(name);
     return team?.color || { bg: 'var(--bg-hover)', text: 'var(--text-primary)', accent: '#666' };
   };
 
   const getTeamShort = (name: string) => {
-    const team = tournament.teams.find((t) => t.name === name);
-    return team?.shortName || name;
+    return teamMap.get(name)?.shortName || name;
   };
 
   return (

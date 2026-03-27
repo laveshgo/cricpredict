@@ -8,39 +8,34 @@ import {
   getTournament,
   getPrediction,
   savePrediction,
-  getGroupPredictions,
-  getActualResults,
   saveActualResults,
   getMatches,
   leaveGroup,
   getGroupMembers,
   onGroupPredictions,
   onActualResults,
-  onMatches,
   getAllMatchPredictionsForGroup,
-  updateTournamentScoring,
-  updateGroupSettings,
 } from '@/lib/firestore';
 import { calculateScore } from '@/lib/scoring';
-import PredictionForm from '@/components/prediction/PredictionForm';
-import PredictionSummary from '@/components/prediction/PredictionSummary';
-import ConsensusView from '@/components/prediction/ConsensusView';
-import LiveData from '@/components/prediction/LiveData';
-import Leaderboard from '@/components/leaderboard/Leaderboard';
-import ScoreBreakdownView from '@/components/leaderboard/ScoreBreakdown';
-import CompareView from '@/components/leaderboard/CompareView';
-import ScoringRulesEditor from '@/components/admin/ScoringRulesEditor';
+import dynamic from 'next/dynamic';
 import CountdownTimer from '@/components/ui/countdown-timer';
-import ShareCard from '@/components/prediction/ShareCard';
+
+// Lazy-loaded heavy components — only loaded when their tab/section is active
+const PredictionForm = dynamic(() => import('@/components/prediction/PredictionForm'));
+const ConsensusView = dynamic(() => import('@/components/prediction/ConsensusView'));
+const LiveData = dynamic(() => import('@/components/prediction/LiveData'));
+const Leaderboard = dynamic(() => import('@/components/leaderboard/Leaderboard'));
+const ScoreBreakdownView = dynamic(() => import('@/components/leaderboard/ScoreBreakdown'));
+const CompareView = dynamic(() => import('@/components/leaderboard/CompareView'));
+const AdminTab = dynamic(() => import('@/components/group/AdminTab'));
+const AllPicksTab = dynamic(() => import('@/components/group/AllPicksTab'));
+const ShareCard = dynamic(() => import('@/components/prediction/ShareCard'));
 import { joinGroupApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
 import type {
   Group,
   Tournament,
@@ -49,7 +44,6 @@ import type {
   LeaderboardEntry,
   Match,
   MatchPrediction,
-  ScoringConfig,
 } from '@/types';
 import {
   Trophy,
@@ -62,9 +56,7 @@ import {
   Eye,
   PieChart,
   Shield,
-  RefreshCw,
   UserPlus,
-  LogOut,
   X,
   User,
   ChevronDown,
@@ -75,13 +67,7 @@ import {
   Share2,
   MessageCircle,
   Link,
-  Download,
-  GripVertical,
-  Calendar,
   Lock,
-  Unlock,
-  UserX,
-  UserCheck,
 } from 'lucide-react';
 import type { UserProfile } from '@/types';
 
@@ -103,15 +89,6 @@ export default function GroupPage() {
   const [tab, setTab] = useState<Tab>('predict');
   const [copied, setCopied] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
-
-  // Admin state
-  const [adminRanking, setAdminRanking] = useState<string[]>([]);
-  const [adminWinner, setAdminWinner] = useState('');
-  const [adminRunnerUp, setAdminRunnerUp] = useState('');
-  const [adminRuns, setAdminRuns] = useState<string[]>(['', '', '', '', '']);
-  const [adminWickets, setAdminWickets] = useState<string[]>(['', '', '', '', '']);
-  const [adminMvp, setAdminMvp] = useState('');
-  const [adminSaving, setAdminSaving] = useState(false);
   const [fetchingCricbuzz, setFetchingCricbuzz] = useState(false);
 
   // Members state
@@ -124,25 +101,9 @@ export default function GroupPage() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [compareUserIds, setCompareUserIds] = useState<[string, string] | null>(null);
 
-  // All Picks expand state
-  const [expandedPrediction, setExpandedPrediction] = useState<string | null>(null);
-
   // Share state
   const [linkCopied, setLinkCopied] = useState(false);
-
-  // Share card state
   const [shareCardPrediction, setShareCardPrediction] = useState<TournamentPrediction | null>(null);
-
-  // Admin drag-to-reorder state
-  const [adminDragIdx, setAdminDragIdx] = useState<number | null>(null);
-  const [adminDragOverIdx, setAdminDragOverIdx] = useState<number | null>(null);
-
-  // Deadline editor state
-  const [editDeadline, setEditDeadline] = useState('');
-  const [editForceLocked, setEditForceLocked] = useState(false);
-  const [editAddLocked, setEditAddLocked] = useState(false);
-  const [editMemberLimit, setEditMemberLimit] = useState('');
-  const [savingSettings, setSavingSettings] = useState(false);
 
   // Load group — only after auth is ready
   useEffect(() => {
@@ -171,9 +132,7 @@ export default function GroupPage() {
       const memberList = await getGroupMembers(groupId);
       setMembers(memberList);
 
-      if (t && !actualResults) {
-        setAdminRanking(t.teams.map((tm) => tm.name));
-      }
+      // Admin ranking is now managed inside AdminTab
     } catch (err) {
       console.error(err);
     } finally {
@@ -199,14 +158,6 @@ export default function GroupPage() {
 
     const unsubResults = onActualResults(groupId, (results) => {
       setActualResults(results);
-      if (results) {
-        setAdminRanking(results.teamRanking);
-        setAdminWinner(results.winner);
-        setAdminRunnerUp(results.runnerUp);
-        setAdminRuns(results.runs.length ? results.runs : ['', '', '', '', '']);
-        setAdminWickets(results.wickets.length ? results.wickets : ['', '', '', '', '']);
-        setAdminMvp(results.mvp);
-      }
     });
 
     return () => {
@@ -215,27 +166,22 @@ export default function GroupPage() {
     };
   }, [group?.id, group?.tournamentId, user]);
 
-  // Sync deadline editor state with group settings
+  // Check if predictions are locked — auto-lock when deadline passes mid-session
+  const [deadlinePassed, setDeadlinePassed] = useState(false);
   useEffect(() => {
     if (!group) return;
-    // Convert ISO string to datetime-local format (YYYY-MM-DDTHH:mm)
-    const d = new Date(group.settings.deadline);
-    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 16);
-    setEditDeadline(local);
-    setEditForceLocked(group.settings.forceLocked);
-    setEditAddLocked(group.settings.addLocked ?? false);
-    setEditMemberLimit(group.settings.memberLimit ? String(group.settings.memberLimit) : '');
-  }, [group?.id, group?.settings.deadline, group?.settings.forceLocked, group?.settings.addLocked, group?.settings.memberLimit]);
+    const deadline = new Date(group.settings.deadline).getTime();
+    const now = Date.now();
+    if (now >= deadline) {
+      setDeadlinePassed(true);
+      return;
+    }
+    setDeadlinePassed(false);
+    const timer = setTimeout(() => setDeadlinePassed(true), deadline - now);
+    return () => clearTimeout(timer);
+  }, [group?.settings.deadline]);
 
-  // Check if predictions are locked
-  const isLocked = (() => {
-    if (!group) return true;
-    if (group.settings.forceLocked) return true;
-    const deadline = new Date(group.settings.deadline);
-    return new Date() > deadline;
-  })();
+  const isLocked = !group || group.settings.forceLocked || deadlinePassed;
 
   const isGroupAdmin = group?.createdBy === user?.uid;
   const isAdmin = isGroupAdmin;
@@ -316,67 +262,7 @@ export default function GroupPage() {
     }
   };
 
-  const handleSaveActualResults = async () => {
-    if (!group || !tournament) return;
-    setAdminSaving(true);
-    try {
-      const results: ActualResults = {
-        groupId,
-        tournamentId: group.tournamentId,
-        teamRanking: adminRanking,
-        winner: adminWinner,
-        runnerUp: adminRunnerUp,
-        runs: adminRuns.filter(Boolean),
-        wickets: adminWickets.filter(Boolean),
-        mvp: adminMvp,
-        lastUpdated: new Date().toISOString(),
-        ...(actualResults?.teamQualifyStatus ? { teamQualifyStatus: actualResults.teamQualifyStatus } : {}),
-      };
-      await saveActualResults(results);
-      setActualResults(results);
-      setSaveMsg('Actual results saved! Leaderboard updated.');
-      setTimeout(() => setSaveMsg(''), 3000);
-    } catch (err: any) {
-      setSaveMsg('Error: ' + (err.message || 'Failed to save results'));
-    } finally {
-      setAdminSaving(false);
-    }
-  };
-
-  const handleSaveSettings = async () => {
-    if (!group) return;
-    // Validate member limit
-    const parsedLimit = editMemberLimit ? Number(editMemberLimit) : null;
-    if (parsedLimit !== null && (isNaN(parsedLimit) || parsedLimit < 2)) {
-      setSaveMsg('Error: Member limit must be at least 2');
-      setTimeout(() => setSaveMsg(''), 3000);
-      return;
-    }
-    if (parsedLimit !== null && group.memberUids.length > parsedLimit) {
-      setSaveMsg(`Error: Group already has ${group.memberUids.length} members, can't set limit to ${parsedLimit}`);
-      setTimeout(() => setSaveMsg(''), 4000);
-      return;
-    }
-    setSavingSettings(true);
-    try {
-      const deadlineISO = new Date(editDeadline).toISOString();
-      await updateGroupSettings(groupId, {
-        deadline: deadlineISO,
-        forceLocked: editForceLocked,
-        addLocked: editAddLocked,
-        memberLimit: parsedLimit,
-      });
-      setSaveMsg('Settings saved!');
-      setTimeout(() => setSaveMsg(''), 3000);
-    } catch (err: any) {
-      setSaveMsg('Error: ' + (err.message || 'Failed to save settings'));
-    } finally {
-      setSavingSettings(false);
-    }
-  };
-
   // Cricbuzz fetch — returns parsed data so callers can use it directly
-  // (React state setters are async, so callers can't rely on state being updated)
   interface CricbuzzParsed {
     teamRanking: string[];
     runs: string[];
@@ -409,7 +295,6 @@ export default function GroupPage() {
         const shortCode = t.teamName;
         const match = tournament.teams.find((tm) => tm.shortName === shortCode);
         const fullName = match?.name || t.teamFullName || shortCode;
-        // Extract qualification status from Cricbuzz (Q=qualified, E=eliminated)
         if (t.teamQualifyStatus === 'Q' || t.teamQualifyStatus === 'E') {
           teamQualifyStatus[fullName] = t.teamQualifyStatus;
         }
@@ -436,30 +321,7 @@ export default function GroupPage() {
     return { teamRanking, runs, wickets, noData: false, teamQualifyStatus };
   }, [tournament, user]);
 
-  // Admin tab: fetch and populate form fields (user reviews before saving)
-  const handleFetchCricbuzz = useCallback(async () => {
-    setFetchingCricbuzz(true);
-    try {
-      const data = await fetchCricbuzzData();
-      if (!data) return;
-      if (data.noData) {
-        setSaveMsg('Tournament has not started yet.');
-        setTimeout(() => setSaveMsg(''), 4000);
-        return;
-      }
-      if (data.teamRanking.length > 0) setAdminRanking(data.teamRanking);
-      if (data.runs.length > 0) setAdminRuns(data.runs);
-      if (data.wickets.length > 0) setAdminWickets(data.wickets);
-      setSaveMsg('Cricbuzz data fetched! Review and save.');
-      setTimeout(() => setSaveMsg(''), 3000);
-    } catch (err: any) {
-      setSaveMsg('Error fetching: ' + (err.message || 'Failed'));
-    } finally {
-      setFetchingCricbuzz(false);
-    }
-  }, [fetchCricbuzzData]);
-
-  // Live tab: fetch, then auto-save to Firestore if admin (using returned data directly)
+  // Live tab: fetch, then auto-save to Firestore if admin
   const handleLiveRefresh = useCallback(async () => {
     if (!group || !tournament) return;
     setFetchingCricbuzz(true);
@@ -472,12 +334,7 @@ export default function GroupPage() {
         return;
       }
 
-      // Update admin form state too (so admin tab stays in sync)
-      if (data.teamRanking.length > 0) setAdminRanking(data.teamRanking);
-      if (data.runs.length > 0) setAdminRuns(data.runs);
-      if (data.wickets.length > 0) setAdminWickets(data.wickets);
-
-      // Auto-save directly using the returned data (not stale state)
+      // Auto-save directly using the returned data
       if (canEditResults) {
         const existing = actualResults;
         const results: ActualResults = {
@@ -498,10 +355,6 @@ export default function GroupPage() {
         };
         await saveActualResults(results);
         setActualResults(results);
-        // Sync admin form fields for winner/runnerUp/mvp from existing
-        if (existing?.winner) setAdminWinner(existing.winner);
-        if (existing?.runnerUp) setAdminRunnerUp(existing.runnerUp);
-        if (existing?.mvp) setAdminMvp(existing.mvp);
         setSaveMsg('Live data fetched and saved!');
       } else {
         setSaveMsg('Live data fetched! Admin will save results.');
@@ -531,31 +384,6 @@ export default function GroupPage() {
     navigator.clipboard.writeText(groupId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  // Export predictions as CSV
-  const exportCSV = () => {
-    if (!tournament || allPredictions.length === 0) return;
-    const teams = tournament.teams.map(t => t.shortName);
-    const headers = ['User', ...teams.map((_, i) => `Rank${i + 1}`), 'Winner', 'Runner-up', ...Array.from({ length: 5 }, (_, i) => `RunScorer${i + 1}`), ...Array.from({ length: 5 }, (_, i) => `WicketTaker${i + 1}`), 'MVP', 'Submitted'];
-    const rows = allPredictions.map(p => [
-      p.userName,
-      ...p.teamRanking.map(t => tournament.teams.find(tm => tm.name === t)?.shortName || t),
-      tournament.teams.find(tm => tm.name === p.winner)?.shortName || p.winner,
-      tournament.teams.find(tm => tm.name === p.runnerUp)?.shortName || p.runnerUp,
-      ...p.runs,
-      ...p.wickets,
-      p.mvp,
-      new Date(p.submittedAt).toLocaleString('en-IN'),
-    ]);
-    const csv = [headers, ...rows].map(r => r.map(c => `"${(c || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${group?.name || 'predictions'}-${tournament.shortName}-predictions.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   // Export leaderboard to clipboard
@@ -930,95 +758,13 @@ export default function GroupPage() {
         </TabsContent>
 
         {/* ===================== ALL PREDICTIONS TAB ===================== */}
-        <TabsContent value="predictions" className="space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3 mb-2">
-            <p className="text-sm text-[var(--text-secondary)]">
-              {allPredictions.length} prediction{allPredictions.length !== 1 ? 's' : ''} submitted
-            </p>
-            <div className="flex gap-2">
-              <Button
-                onClick={exportCSV}
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-xs border-[var(--accent-dim)] text-[var(--accent)] hover:bg-[var(--accent-ghost)]"
-              >
-                <Download size={12} />
-                Export CSV
-              </Button>
-            </div>
-          </div>
-
-          {/* Compact user list with expand */}
-          {allPredictions.map((pred) => (
-            <div key={pred.userId}>
-              <button
-                onClick={() => setExpandedPrediction(expandedPrediction === pred.userId ? null : pred.userId)}
-                className="w-full text-left"
-              >
-                <Card className={`glass-card transition-all duration-200 hover:border-[var(--accent-dim)] ${
-                  expandedPrediction === pred.userId ? 'border-[var(--accent)] shadow-lg shadow-[var(--accent)]/10' : ''
-                } ${pred.userId === user?.uid ? 'border-[var(--accent)] border-opacity-50' : ''}`}>
-                  <CardContent className="py-3 px-4 flex items-center gap-3">
-                    <Avatar className="h-8 w-8 shrink-0">
-                      <AvatarFallback className="bg-[var(--bg-elevated)]">
-                        <User size={14} className="text-[var(--text-muted)]" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-[var(--text-primary)]">
-                          {pred.userName}
-                        </span>
-                        {pred.userId === user?.uid && (
-                          <Badge className="text-[9px] px-1.5 py-0 bg-[var(--accent)]/20 text-[var(--accent)] border-[var(--accent)]/40">you</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] text-[var(--text-muted)]">
-                          {new Date(pred.submittedAt).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        {pred.winner && (
-                          <>
-                            <span className="text-[10px] text-[var(--text-muted)]">·</span>
-                            <Badge
-                              style={{ background: tournament.teams.find(t => t.name === pred.winner)?.color?.bg || '#333', color: tournament.teams.find(t => t.name === pred.winner)?.color?.text || '#fff' }}
-                              className="text-[9px] px-1.5 py-0"
-                            >
-                              {tournament.teams.find(t => t.name === pred.winner)?.shortName || '?'}
-                            </Badge>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div className="shrink-0">
-                      {expandedPrediction === pred.userId ? <ChevronUp size={16} className="text-[var(--accent)]" /> : <ChevronDown size={16} className="text-[var(--text-muted)]" />}
-                    </div>
-                  </CardContent>
-                </Card>
-              </button>
-
-              {expandedPrediction === pred.userId && (
-                <div className="mt-2 mb-4 animate-fade-in">
-                  <PredictionSummary
-                    prediction={pred}
-                    tournament={tournament}
-                    isCurrentUser={pred.userId === user?.uid}
-                  />
-                  {pred.winner && (
-                    <Button
-                      onClick={(e) => { e.stopPropagation(); setShareCardPrediction(pred); }}
-                      variant="ghost"
-                      size="sm"
-                      className="mt-2 gap-1.5 text-xs text-[var(--accent)] hover:bg-[var(--accent-ghost)]"
-                    >
-                      <Share2 size={12} />
-                      Share as Image
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+        <TabsContent value="predictions">
+          <AllPicksTab
+            allPredictions={allPredictions}
+            tournament={tournament}
+            currentUserId={user?.uid}
+            groupName={group.name}
+          />
         </TabsContent>
 
         {/* ===================== CONSENSUS TAB ===================== */}
@@ -1167,360 +913,21 @@ export default function GroupPage() {
 
         {/* ===================== ADMIN TAB ===================== */}
         {canEditResults && (
-          <TabsContent value="admin" className="space-y-6">
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="text-lg">Actual Results</CardTitle>
-                <CardDescription className="text-sm">
-                  Enter or fetch the real tournament results. Saving will immediately update the leaderboard.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {tournament.cricbuzzSeriesId && (
-                  <Button
-                    onClick={handleFetchCricbuzz}
-                    disabled={fetchingCricbuzz}
-                    className="gap-2 bg-[var(--accent)] text-white font-semibold hover:bg-[var(--accent-hover)]"
-                  >
-                    <RefreshCw size={16} className={fetchingCricbuzz ? 'animate-spin' : ''} />
-                    {fetchingCricbuzz ? 'Fetching...' : 'Fetch from Cricbuzz'}
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Prediction Settings */}
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Calendar size={18} className="text-[var(--accent)]" />
-                  Prediction Settings
-                </CardTitle>
-                <CardDescription className="text-sm">
-                  Set the prediction deadline and lock status for this group.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                {/* Deadline picker */}
-                <div>
-                  <label className="text-xs block mb-2 font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-                    Prediction Deadline
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={editDeadline}
-                    onChange={(e) => setEditDeadline(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-lg text-sm outline-none bg-[var(--bg-primary)] text-[var(--text-primary)] border border-[var(--accent-dim)] hover:border-[var(--accent)] focus:border-[var(--accent)] transition-colors"
-                  />
-                  <p className="text-xs mt-1.5 text-[var(--text-muted)]">
-                    Predictions will auto-lock after this time.
-                  </p>
-                </div>
-
-                {/* Force Lock toggle */}
-                <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
-                  <div className="flex items-center gap-3">
-                    {editForceLocked ? (
-                      <Lock size={18} className="text-red-400" />
-                    ) : (
-                      <Unlock size={18} className="text-green-400" />
-                    )}
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--text-primary)]">
-                        Force Lock Predictions
-                      </p>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        {editForceLocked
-                          ? 'Predictions are locked regardless of deadline'
-                          : 'Predictions follow the deadline above'}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setEditForceLocked(!editForceLocked)}
-                    className="relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none"
-                    style={{
-                      background: editForceLocked ? 'var(--accent)' : 'var(--bg-elevated)',
-                      border: '1px solid var(--border)',
-                    }}
-                  >
-                    <span
-                      className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
-                      style={{
-                        transform: editForceLocked ? 'translateX(24px)' : 'translateX(0)',
-                      }}
-                    />
-                  </button>
-                </div>
-
-                {/* Member Limit */}
-                <div>
-                  <label className="text-xs block mb-2 font-semibold uppercase tracking-wide text-[var(--text-secondary)]">
-                    Member Limit <span className="normal-case font-normal text-[var(--text-muted)]">(optional)</span>
-                  </label>
-                  <input
-                    type="number"
-                    min={2}
-                    value={editMemberLimit}
-                    onChange={(e) => setEditMemberLimit(e.target.value)}
-                    placeholder="Leave blank for unlimited"
-                    className="w-full px-3 py-2.5 rounded-lg text-sm outline-none bg-[var(--bg-primary)] text-[var(--text-primary)] border border-[var(--accent-dim)] hover:border-[var(--accent)] focus:border-[var(--accent)] transition-colors"
-                  />
-                  <p className="text-xs mt-1.5 text-[var(--text-muted)]">
-                    Minimum 2. Leave blank for no limit.
-                    {group && group.settings.memberLimit && (
-                      <> Currently {group.memberUids.length}/{group.settings.memberLimit} members.</>
-                    )}
-                  </p>
-                </div>
-
-                {/* Close Group toggle */}
-                <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)' }}>
-                  <div className="flex items-center gap-3">
-                    {editAddLocked ? (
-                      <UserX size={18} className="text-red-400" />
-                    ) : (
-                      <UserCheck size={18} className="text-green-400" />
-                    )}
-                    <div>
-                      <p className="text-sm font-semibold text-[var(--text-primary)]">
-                        Close Group
-                      </p>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        {editAddLocked
-                          ? 'No new members can join this group'
-                          : 'Anyone with the link can join'}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setEditAddLocked(!editAddLocked)}
-                    className="relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none"
-                    style={{
-                      background: editAddLocked ? 'var(--accent)' : 'var(--bg-elevated)',
-                      border: '1px solid var(--border)',
-                    }}
-                  >
-                    <span
-                      className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200"
-                      style={{
-                        transform: editAddLocked ? 'translateX(24px)' : 'translateX(0)',
-                      }}
-                    />
-                  </button>
-                </div>
-
-                {/* Save button */}
-                <Button
-                  onClick={handleSaveSettings}
-                  disabled={savingSettings}
-                  className="w-full bg-[var(--accent)] text-white font-bold hover:bg-[var(--accent-hover)] transition-all"
-                >
-                  {savingSettings ? 'Saving...' : 'Save Settings'}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Team Ranking */}
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="text-base">Points Table Ranking</CardTitle>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>Drag or use arrows to reorder</p>
-              </CardHeader>
-              <CardContent>
-                <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-                {adminRanking.map((team, idx) => {
-                  const color = tournament.teams.find((t) => t.name === team)?.color;
-                  const shortName = tournament.teams.find((t) => t.name === team)?.shortName || team;
-                  const isDragging = adminDragIdx === idx;
-                  const isDragOver = adminDragOverIdx === idx && adminDragIdx !== null && adminDragIdx !== idx;
-                  const isLast = idx === adminRanking.length - 1;
-                  return (
-                    <div
-                      key={team}
-                      draggable
-                      onDragStart={() => { setAdminDragIdx(idx); setAdminDragOverIdx(idx); }}
-                      onDragOver={(e) => { e.preventDefault(); setAdminDragOverIdx(idx); }}
-                      onDragEnd={() => {
-                        if (adminDragIdx !== null && adminDragOverIdx !== null && adminDragIdx !== adminDragOverIdx) {
-                          const copy = [...adminRanking];
-                          const [moved] = copy.splice(adminDragIdx, 1);
-                          copy.splice(adminDragOverIdx, 0, moved);
-                          setAdminRanking(copy);
-                        }
-                        setAdminDragIdx(null);
-                        setAdminDragOverIdx(null);
-                      }}
-                      className="flex items-center gap-2 px-3 py-2.5 cursor-grab active:cursor-grabbing transition-all duration-150"
-                      style={{
-                        background: isDragging ? 'var(--accent-ghost)' : 'var(--bg-card)',
-                        borderBottom: isLast ? 'none' : '1px solid var(--border)',
-                        opacity: isDragging ? 0.5 : 1,
-                        borderTop: isDragOver ? '2px solid var(--accent)' : '2px solid transparent',
-                      }}
-                    >
-                      <GripVertical size={14} style={{ color: 'var(--text-muted)' }} className="shrink-0" />
-                      <span className="text-sm font-bold w-6 text-[var(--accent)] tabular-nums">{idx + 1}</span>
-                      <div
-                        className="w-9 h-6 rounded-md flex items-center justify-center text-[9px] font-black shrink-0 shadow-sm"
-                        style={{ background: color?.bg || '#333', color: color?.text || '#fff' }}
-                      >
-                        {shortName}
-                      </div>
-                      <span className="flex-1 text-sm font-medium text-[var(--text-primary)] truncate">{team}</span>
-                      <div className="flex gap-0.5">
-                        <Button
-                          onClick={() => {
-                            if (idx === 0) return;
-                            const copy = [...adminRanking];
-                            [copy[idx], copy[idx - 1]] = [copy[idx - 1], copy[idx]];
-                            setAdminRanking(copy);
-                          }}
-                          disabled={idx === 0}
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent-ghost)] disabled:opacity-20"
-                        ><ChevronUp size={14} /></Button>
-                        <Button
-                          onClick={() => {
-                            if (idx === adminRanking.length - 1) return;
-                            const copy = [...adminRanking];
-                            [copy[idx], copy[idx + 1]] = [copy[idx + 1], copy[idx]];
-                            setAdminRanking(copy);
-                          }}
-                          disabled={idx === adminRanking.length - 1}
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-[var(--text-secondary)] hover:text-[var(--accent)] hover:bg-[var(--accent-ghost)] disabled:opacity-20"
-                        ><ChevronDown size={14} /></Button>
-                      </div>
-                    </div>
-                  );
-                })}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Winner / Runner-up / MVP */}
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="text-base">Finals & MVP</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {[
-                    { label: 'Winner', value: adminWinner, set: setAdminWinner },
-                    { label: 'Runner-up', value: adminRunnerUp, set: setAdminRunnerUp },
-                  ].map(({ label, value, set }) => (
-                    <div key={label}>
-                      <label className="text-xs block mb-2 font-semibold uppercase tracking-wide text-[var(--text-secondary)]">{label}</label>
-                      <select
-                        value={value}
-                        onChange={(e) => set(e.target.value)}
-                        className="w-full px-3 py-2.5 rounded-lg text-sm outline-none bg-[var(--bg-primary)] text-[var(--text-primary)] border border-[var(--accent-dim)] hover:border-[var(--accent)] transition-colors"
-                      >
-                        <option value="">Select...</option>
-                        {tournament.teams.map((t) => (
-                          <option key={t.name} value={t.name}>{t.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
-                  <div>
-                    <label className="text-xs block mb-2 font-semibold uppercase tracking-wide text-[var(--text-secondary)]">MVP</label>
-                    <Input
-                      type="text"
-                      value={adminMvp}
-                      onChange={(e) => setAdminMvp(e.target.value)}
-                      placeholder="Player name"
-                      className="bg-[var(--bg-primary)] text-[var(--text-primary)] border-[var(--accent-dim)] hover:border-[var(--accent)] transition-colors"
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Top Run Scorers */}
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="text-base">Top Run Scorers</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 stagger-children">
-                {adminRuns.map((player, idx) => (
-                  <div key={idx} className="flex items-center gap-3 p-2">
-                    <span className="text-sm font-bold w-6 text-[var(--accent)]">#{idx + 1}</span>
-                    <Input
-                      type="text"
-                      value={player}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                        const copy = [...adminRuns];
-                        copy[idx] = e.target.value;
-                        setAdminRuns(copy);
-                      }}
-                      placeholder={`Run scorer #${idx + 1}`}
-                      className="flex-1 bg-[var(--bg-primary)] text-[var(--text-primary)] border-[var(--accent-dim)] hover:border-[var(--accent)] transition-colors"
-                    />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Top Wicket Takers */}
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="text-base">Top Wicket Takers</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 stagger-children">
-                {adminWickets.map((player, idx) => (
-                  <div key={idx} className="flex items-center gap-3 p-2">
-                    <span className="text-sm font-bold w-6 text-[var(--accent)]">#{idx + 1}</span>
-                    <Input
-                      type="text"
-                      value={player}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                        const copy = [...adminWickets];
-                        copy[idx] = e.target.value;
-                        setAdminWickets(copy);
-                      }}
-                      placeholder={`Wicket taker #${idx + 1}`}
-                      className="flex-1 bg-[var(--bg-primary)] text-[var(--text-primary)] border-[var(--accent-dim)] hover:border-[var(--accent)] transition-colors"
-                    />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Save Button */}
-            <Button
-              onClick={handleSaveActualResults}
-              disabled={adminSaving}
-              size="lg"
-              className="w-full bg-[var(--accent)] text-white font-bold hover:bg-[var(--accent-hover)] shadow-lg hover:shadow-xl transition-all"
-            >
-              {adminSaving ? 'Saving...' : 'Save Actual Results'}
-            </Button>
-
-            {/* Scoring Rules Editor */}
-            <Separator className="my-8 bg-[var(--bg-elevated)]" />
-            <Card className="glass-card">
-              <CardHeader>
-                <CardTitle className="text-lg">Scoring Rules</CardTitle>
-                <CardDescription className="text-sm">
-                  Configure how points are calculated. Changes apply to all group members.
-                </CardDescription>
-              </CardHeader>
-            </Card>
-            <ScoringRulesEditor
-              scoring={tournament.scoring}
-              onSave={async (newScoring: ScoringConfig) => {
-                await updateTournamentScoring(tournament.id, newScoring);
-                // Refresh tournament data
-                const t = await getTournament(group.tournamentId);
-                if (t) setTournament(t);
-                setSaveMsg('Scoring rules updated!');
-                setTimeout(() => setSaveMsg(''), 3000);
-              }}
-              isTournamentCreator={tournament.createdBy === user?.uid}
+          <TabsContent value="admin">
+            <AdminTab
+              group={group}
+              tournament={tournament}
+              actualResults={actualResults}
+              matches={matches}
+              allPredictions={allPredictions}
+              allMatchPredictions={allMatchPredictions}
+              members={members}
+              isGroupAdmin={isGroupAdmin}
+              user={user}
+              setSaveMsg={setSaveMsg}
+              setTournament={setTournament}
+              fetchCricbuzzData={fetchCricbuzzData}
+              groupId={groupId}
             />
           </TabsContent>
         )}

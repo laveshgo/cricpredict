@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/hooks/useTheme';
 import {
   onFantasyLeagueUpdate,
   onAuctionStateUpdate,
@@ -13,8 +14,8 @@ import {
   updateFantasyLeagueSettings,
 } from '@/lib/fantasy-firestore';
 import { onTournament } from '@/lib/firestore';
-import { buildAuctionPlayerOrder, getAuctionSetPlayers, FANTASY_BUDGET, FANTASY_SQUAD_SIZE, BID_INCREMENT, TIMER_DURATION } from '@/lib/fantasy-players';
-import type { FantasyLeague, AuctionState, AuctionRules, AuctionSet } from '@/types/fantasy';
+import { buildAuctionPlayerOrder, getAuctionSetPlayers, getFantasyPlayerPool, FANTASY_BUDGET, FANTASY_SQUAD_SIZE, BID_INCREMENT, TIMER_DURATION } from '@/lib/fantasy-players';
+import type { FantasyLeague, AuctionState, AuctionRules, AuctionSet, PlayerRole } from '@/types/fantasy';
 import { DEFAULT_AUCTION_RULES, AUCTION_SET_ORDER, AUCTION_SETS } from '@/types/fantasy';
 import type { Tournament } from '@/types';
 import {
@@ -35,6 +36,8 @@ import {
   ChevronDown,
   ChevronUp,
   ListOrdered,
+  Trophy,
+  Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -50,12 +53,27 @@ const ROLE_LABELS: Record<string, string> = {
   WK: 'Wicket-keepers',
 };
 
+const ROLE_COLORS: Record<PlayerRole, { dark: string; light: string }> = {
+  WK: { dark: 'bg-amber-500/20 text-amber-400 border-amber-500/30', light: 'bg-amber-100 text-amber-700 border-amber-300' },
+  BAT: { dark: 'bg-blue-500/20 text-blue-400 border-blue-500/30', light: 'bg-blue-100 text-blue-700 border-blue-300' },
+  AR: { dark: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', light: 'bg-emerald-100 text-emerald-700 border-emerald-300' },
+  BOWL: { dark: 'bg-purple-500/20 text-purple-400 border-purple-500/30', light: 'bg-purple-100 text-purple-700 border-purple-300' },
+};
+
+const ROLE_ORDER: PlayerRole[] = ['WK', 'BAT', 'AR', 'BOWL'];
+
+const ROLE_ICONS: Record<PlayerRole, string> = {
+  WK: '🧤', BAT: '🏏', AR: '⭐', BOWL: '🎯',
+};
+
 export default function FantasyLeaguePage() {
   const params = useParams();
   const router = useRouter();
   const tournamentId = params.tournamentId as string;
   const leagueId = params.leagueId as string;
   const { user, profile, loading: authLoading } = useAuth();
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
   const [league, setLeague] = useState<FantasyLeague | null>(null);
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [auctionState, setAuctionState] = useState<AuctionState | null>(null);
@@ -469,62 +487,118 @@ export default function FantasyLeaguePage() {
 
   // If auction is completed, show results
   if (auctionState?.status === 'completed') {
+    // Build a lookup for isForeign from the player pool (fallback for old auction data)
+    const playerPool = getFantasyPlayerPool();
+    const foreignLookup = new Map(playerPool.map(p => [p.name, p.isForeign]));
+
+    // Sort users by most players (or by spent) for ranking feel
+    const sortedUsers = Object.entries(auctionState.budgets)
+      .map(([uid, budget]) => ({
+        uid,
+        budget,
+        players: auctionState.soldPlayers.filter(p => p.boughtBy === uid),
+        memberInfo: league.members?.[uid],
+      }))
+      .sort((a, b) => b.players.length - a.players.length || b.budget.spent - a.budget.spent);
+
+    const totalSold = auctionState.soldPlayers.length;
+    const totalUnsold = auctionState.unsoldPlayers?.length || 0;
+
     return (
       <div className="mx-auto max-w-4xl px-4 py-6 animate-fade-in">
-        <div className="flex items-center gap-3 mb-6">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-5">
           <Link href={`/tournament/${tournamentId}?tab=fantasy`}>
             <button className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors">
               <ArrowLeft size={16} className="text-[var(--text-muted)]" />
             </button>
           </Link>
-          <div>
+          <div className="flex-1">
             <h1 className="text-xl font-bold text-[var(--text-primary)]">{league.name}</h1>
             <p className="text-xs text-[var(--text-muted)]">Auction Complete</p>
           </div>
+          <Badge className="bg-[var(--accent)]/15 text-[var(--accent)] border-0 text-xs px-2.5 py-1">
+            <Trophy size={12} className="mr-1" /> {totalSold} sold · {totalUnsold} unsold
+          </Badge>
         </div>
 
-        {/* Results per user */}
-        {Object.entries(auctionState.budgets).map(([uid, budget]) => {
-          const userPlayers = auctionState.soldPlayers.filter(p => p.boughtBy === uid);
-          const memberInfo = league.members?.[uid];
-          const isMe = uid === user?.uid;
+        {/* Squad Cards */}
+        <div className="space-y-5">
+          {sortedUsers.map(({ uid, budget, players, memberInfo }, rank) => {
+            const isMe = uid === user?.uid;
+            const foreignCount = players.filter(p => p.isForeign || foreignLookup.get(p.playerName)).length;
 
-          return (
-            <Card key={uid} className={`mb-4 border ${isMe ? 'border-[var(--accent)]/30 bg-[var(--accent)]/5' : 'border-[var(--bg-elevated)] bg-[var(--bg-card)]'}`}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Shield size={16} className="text-[var(--accent)]" />
-                    <span className="text-sm font-bold text-[var(--text-primary)]">
-                      {memberInfo?.displayName || 'User'}
-                    </span>
-                    {isMe && <Badge className="bg-[var(--accent)]/15 text-[var(--accent)] border-0 text-[9px]">you</Badge>}
-                  </div>
-                  <div className="text-xs text-[var(--text-muted)]">
-                    {userPlayers.length} players — {budget.spent.toFixed(1)} Cr spent
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  {userPlayers.map(p => (
-                    <div key={p.playerId} className="flex items-center justify-between px-2.5 py-1.5 rounded-md bg-[var(--bg-elevated)]">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Badge className="text-[8px] font-bold px-1 py-0 border bg-[var(--bg-card)] text-[var(--text-muted)] border-[var(--border)]">
-                          {p.role}
-                        </Badge>
-                        <span className="text-xs text-[var(--text-primary)] truncate">{p.playerName}</span>
-                        <span className="text-[10px] text-[var(--text-muted)]">{p.teamShort}</span>
-                        {p.isForeign && (
-                          <span className="text-[10px] shrink-0" title="Overseas">✈</span>
-                        )}
+            // Group by role
+            const byRole: Record<PlayerRole, typeof players> = { WK: [], BAT: [], AR: [], BOWL: [] };
+            players.forEach(p => byRole[p.role]?.push(p));
+
+            return (
+              <Card key={uid} className={`border overflow-hidden transition-all ${isMe ? 'border-[var(--accent)]/40 ring-1 ring-[var(--accent)]/20' : 'border-[var(--border)]'}`}>
+                {/* Card header with gradient */}
+                <div className={`px-4 py-3 border-b border-[var(--border)] ${isMe ? 'bg-[var(--accent)]/8' : 'bg-[var(--bg-elevated)]'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${rank === 0 ? 'bg-amber-500/20 text-amber-400' : rank === 1 ? 'bg-gray-400/20 text-gray-400' : rank === 2 ? 'bg-orange-600/20 text-orange-400' : 'bg-[var(--bg-card)] text-[var(--text-muted)]'}`}>
+                        {rank + 1}
                       </div>
-                      <span className="text-xs font-bold text-[var(--accent)] shrink-0">{p.soldPrice} Cr</span>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-[var(--text-primary)]">
+                            {memberInfo?.displayName || 'User'}
+                          </span>
+                          {isMe && <Badge className="bg-[var(--accent)]/15 text-[var(--accent)] border-0 text-[9px]">you</Badge>}
+                        </div>
+                        <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)] mt-0.5">
+                          <span>{players.length} players</span>
+                          <span>{foreignCount} overseas</span>
+                        </div>
+                      </div>
                     </div>
-                  ))}
+                    <div className="text-sm font-bold text-[var(--accent)]">{budget.spent.toFixed(1)} Cr spent</div>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+
+                {/* Players grouped by role */}
+                <CardContent className="p-0">
+                  {ROLE_ORDER.map(role => {
+                    const rolePlayers = byRole[role];
+                    if (rolePlayers.length === 0) return null;
+
+                    return (
+                      <div key={role}>
+                        {/* Role section header */}
+                        <div className="flex items-center gap-2 px-4 py-1.5 bg-[var(--bg-elevated)]/50">
+                          <span className="text-xs">{ROLE_ICONS[role]}</span>
+                          <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                            {ROLE_LABELS[role]} ({rolePlayers.length})
+                          </span>
+                        </div>
+                        {/* Players in this role */}
+                        <div className="divide-y divide-[var(--border)]/50">
+                          {rolePlayers.map(p => (
+                            <div key={p.playerId} className="flex items-center justify-between px-4 py-2 hover:bg-[var(--bg-elevated)]/30 transition-colors">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <Badge className={`text-[8px] font-bold px-1.5 py-0 border ${isLight ? ROLE_COLORS[p.role].light : ROLE_COLORS[p.role].dark}`}>
+                                  {p.role}
+                                </Badge>
+                                <span className="text-xs font-medium text-[var(--text-primary)] truncate">{p.playerName}</span>
+                                <span className="text-[10px] text-[var(--text-muted)] shrink-0">{p.teamShort}</span>
+                                {(p.isForeign || foreignLookup.get(p.playerName)) && (
+                                  <span className="text-xs shrink-0" title="Overseas">✈️</span>
+                                )}
+                              </div>
+                              <span className="text-xs font-bold text-[var(--accent)] shrink-0 ml-2">{p.soldPrice} Cr</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
     );
   }
