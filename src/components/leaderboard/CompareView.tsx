@@ -6,8 +6,10 @@ import { Fragment } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Check } from 'lucide-react';
 
+const DEFAULT_TEAM_COLOR = { bg: '#333', text: '#fff', accent: '#666' };
+
 interface Props {
-  predictions: [TournamentPrediction, TournamentPrediction]; // exactly two users
+  predictions: [TournamentPrediction, TournamentPrediction];
   scores: [ScoreBreakdown, ScoreBreakdown];
   actualResults: ActualResults;
   tournament: Tournament;
@@ -24,8 +26,20 @@ export default function CompareView({ predictions, scores, actualResults, tourna
   };
 
   const getTeamColor = (name: string) => {
-    return teamMap.get(name)?.color || { bg: '#333', text: '#fff', accent: '#666' };
+    return teamMap.get(name)?.color || DEFAULT_TEAM_COLOR;
   };
+
+  const rankMapA = useMemo(() => {
+    const m = new Map<string, number>();
+    predA.teamRanking.forEach((t, i) => m.set(t, i + 1));
+    return m;
+  }, [predA.teamRanking]);
+
+  const rankMapB = useMemo(() => {
+    const m = new Map<string, number>();
+    predB.teamRanking.forEach((t, i) => m.set(t, i + 1));
+    return m;
+  }, [predB.teamRanking]);
 
   const categories = [
     { label: 'Rankings', a: scoreA.ranking, b: scoreB.ranking },
@@ -143,8 +157,8 @@ export default function CompareView({ predictions, scores, actualResults, tourna
             <div className="text-center">{predB.userName}</div>
           </div>
           {actualResults.teamRanking.map((team, idx) => {
-            const posA = predA.teamRanking.indexOf(team) + 1;
-            const posB = predB.teamRanking.indexOf(team) + 1;
+            const posA = rankMapA.get(team) ?? 0;
+            const posB = rankMapB.get(team) ?? 0;
             const color = getTeamColor(team);
             const isLast = idx === actualResults.teamRanking.length - 1;
             return (

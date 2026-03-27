@@ -63,6 +63,12 @@ export default function Leaderboard({ entries, currentUserId, onUserClick }: Pro
   const topThree = sorted.slice(0, 3);
   const rest = sorted.slice(3);
 
+  const rankMap = useMemo(() => {
+    const m = new Map<string, number>();
+    sorted.forEach((e, i) => m.set(e.userId, i + 1));
+    return m;
+  }, [sorted]);
+
   const medalEmoji = (rank: number) =>
     rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
 
@@ -97,7 +103,7 @@ export default function Leaderboard({ entries, currentUserId, onUserClick }: Pro
           {/* Reorder: 2nd, 1st, 3rd for visual podium */}
           {[topThree[1], topThree[0], topThree[2]].filter(Boolean).map((entry) => {
             if (!entry) return null;
-            const rank = sorted.indexOf(entry) + 1;
+            const rank = rankMap.get(entry.userId) ?? 0;
             const isMe = entry.userId === currentUserId;
             const isFirst = rank === 1;
 
@@ -171,7 +177,7 @@ export default function Leaderboard({ entries, currentUserId, onUserClick }: Pro
           </div>
 
           {rest.map((entry) => {
-            const rank = sorted.indexOf(entry) + 1;
+            const rank = rankMap.get(entry.userId) ?? 0;
             const isMe = entry.userId === currentUserId;
 
             return (

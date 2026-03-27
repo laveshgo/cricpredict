@@ -7,6 +7,8 @@ import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
+const DEFAULT_TEAM_COLOR = { bg: 'var(--bg-hover)', text: 'var(--text-primary)', accent: '#666' };
+
 interface Props {
   tournament: Tournament;
   existingPrediction?: TournamentPrediction | null;
@@ -123,8 +125,8 @@ function PlayerInput({
 export default function PredictionForm({ tournament, existingPrediction, isLocked, onSave }: Props) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
-  const teamNames = tournament.teams.map((t) => t.name);
-  const allPlayers = Object.values(tournament.players).flat().sort();
+  const teamNames = useMemo(() => tournament.teams.map((t) => t.name), [tournament.teams]);
+  const allPlayers = useMemo(() => Object.values(tournament.players).flat().sort(), [tournament.players]);
 
   const [ranking, setRanking] = useState<string[]>(
     existingPrediction?.teamRanking || [...teamNames]
@@ -392,8 +394,7 @@ export default function PredictionForm({ tournament, existingPrediction, isLocke
 
   // O(1) lookups instead of linear .find() on every call
   const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.name, t])), [tournament.teams]);
-  const defaultColor = { bg: 'var(--bg-hover)', text: 'var(--text-primary)', accent: '#666' };
-  const getTeamColor = (name: string) => teamMap.get(name)?.color || defaultColor;
+  const getTeamColor = (name: string) => teamMap.get(name)?.color || DEFAULT_TEAM_COLOR;
   const getTeamShort = (name: string) => teamMap.get(name)?.shortName || name;
 
   // Progress indicator

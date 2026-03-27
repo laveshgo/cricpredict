@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Clock, Lock, Unlock } from 'lucide-react';
 
 interface Props {
-  deadline: string; // ISO datetime
+  deadline: string;
   isLocked: boolean;
   forceLocked?: boolean;
 }
@@ -20,6 +20,26 @@ function getTimeLeft(deadline: string) {
     seconds: Math.floor((diff / 1000) % 60),
     expired: false,
   };
+}
+
+function TimeBox({ value, label, textColor, borderColor }: { value: number; label: string; textColor: string; borderColor: string }) {
+  return (
+    <div className="flex flex-col items-center">
+      <div
+        className="w-11 h-11 sm:w-13 sm:h-13 rounded-lg flex items-center justify-center text-lg sm:text-xl font-black tabular-nums"
+        style={{ background: 'var(--bg-primary)', color: textColor, border: `1px solid ${borderColor}` }}
+      >
+        {String(value).padStart(2, '0')}
+      </div>
+      <span className="text-[9px] mt-1 font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function Colon({ color }: { color: string }) {
+  return <span className="text-base font-bold pb-4" style={{ color, opacity: 0.5 }}>:</span>;
 }
 
 export default function CountdownTimer({ deadline, isLocked, forceLocked }: Props) {
@@ -42,28 +62,7 @@ export default function CountdownTimer({ deadline, isLocked, forceLocked }: Prop
   const statusBorder = isOpen
     ? 'rgba(46, 204, 113, 0.2)'
     : 'rgba(233, 69, 96, 0.2)';
-
-  const TimeBox = ({ value, label }: { value: number; label: string }) => (
-    <div className="flex flex-col items-center">
-      <div
-        className="w-11 h-11 sm:w-13 sm:h-13 rounded-lg flex items-center justify-center text-lg sm:text-xl font-black tabular-nums"
-        style={{
-          background: 'var(--bg-primary)',
-          color: isOpen ? 'var(--text-primary)' : 'var(--error)',
-          border: `1px solid ${statusBorder}`,
-        }}
-      >
-        {String(value).padStart(2, '0')}
-      </div>
-      <span className="text-[9px] mt-1 font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-        {label}
-      </span>
-    </div>
-  );
-
-  const Colon = () => (
-    <span className="text-base font-bold pb-4" style={{ color: statusColor, opacity: 0.5 }}>:</span>
-  );
+  const timeBoxTextColor = isOpen ? 'var(--text-primary)' : 'var(--error)';
 
   return (
     <div
@@ -117,15 +116,15 @@ export default function CountdownTimer({ deadline, isLocked, forceLocked }: Prop
         <div className="flex items-center justify-center gap-1.5 sm:gap-2.5">
           {days > 0 && (
             <>
-              <TimeBox value={days} label="days" />
-              <Colon />
+              <TimeBox value={days} label="days" textColor={timeBoxTextColor} borderColor={statusBorder} />
+              <Colon color={statusColor} />
             </>
           )}
-          <TimeBox value={hours} label="hrs" />
-          <Colon />
-          <TimeBox value={minutes} label="min" />
-          <Colon />
-          <TimeBox value={seconds} label="sec" />
+          <TimeBox value={hours} label="hrs" textColor={timeBoxTextColor} borderColor={statusBorder} />
+          <Colon color={statusColor} />
+          <TimeBox value={minutes} label="min" textColor={timeBoxTextColor} borderColor={statusBorder} />
+          <Colon color={statusColor} />
+          <TimeBox value={seconds} label="sec" textColor={timeBoxTextColor} borderColor={statusBorder} />
         </div>
       )}
 

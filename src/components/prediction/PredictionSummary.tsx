@@ -6,6 +6,8 @@ import { Trophy, Target, Award, Zap, Star } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { Badge } from '@/components/ui/badge';
 
+const DEFAULT_TEAM_COLOR = { bg: 'var(--bg-hover)', text: 'var(--text-primary)', accent: '#666' };
+
 interface Props {
   prediction: TournamentPrediction;
   tournament: Tournament;
@@ -19,7 +21,7 @@ export default function PredictionSummary({ prediction, tournament, isCurrentUse
 
   const getTeamColor = (name: string) => {
     const team = teamMap.get(name);
-    return team?.color || { bg: 'var(--bg-hover)', text: 'var(--text-primary)', accent: '#666' };
+    return team?.color || DEFAULT_TEAM_COLOR;
   };
 
   const getTeamShort = (name: string) => {

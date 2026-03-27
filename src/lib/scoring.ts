@@ -65,15 +65,25 @@ export function calculateScore(
     },
   };
 
+  // Pre-index actuals for O(1) lookups
+  const actualRankMap = new Map<string, number>();
+  actual.teamRanking.forEach((t, i) => actualRankMap.set(t, i));
+
+  const actualRunsMap = new Map<string, number>();
+  actual.runs.forEach((p, i) => actualRunsMap.set(p.toLowerCase(), i));
+
+  const actualWicketsMap = new Map<string, number>();
+  actual.wickets.forEach((p, i) => actualWicketsMap.set(p.toLowerCase(), i));
+
   // --- Team Ranking ---
   if (prediction.teamRanking.length > 0 && actual.teamRanking.length > 0) {
     prediction.teamRanking.forEach((team, idx) => {
       const predictedRank = idx + 1;
-      const actualIdx = actual.teamRanking.indexOf(team);
-      const actualRank = actualIdx >= 0 ? actualIdx + 1 : '-';
+      const actualIdx = actualRankMap.get(team);
+      const actualRank = actualIdx !== undefined ? actualIdx + 1 : '-';
       let pts = 0;
 
-      if (actualIdx >= 0) {
+      if (actualIdx !== undefined) {
         const diff = Math.abs(idx - actualIdx);
         if (diff === 0) pts = scoring.rankExact;
         else if (diff === 1) pts = scoring.rankOff1;
@@ -112,12 +122,10 @@ export function calculateScore(
   if (prediction.runs.length > 0 && actual.runs.length > 0) {
     prediction.runs.forEach((player, idx) => {
       const predictedRank = idx + 1;
-      const actualIdx = actual.runs.findIndex(
-        (a) => a.toLowerCase() === player.toLowerCase()
-      );
+      const actualIdx = actualRunsMap.get(player.toLowerCase());
       let pts = 0;
 
-      if (actualIdx >= 0) {
+      if (actualIdx !== undefined) {
         if (actualIdx === idx) pts = scoring.runsExact;
         else pts = scoring.runsPartial;
       }
@@ -131,12 +139,10 @@ export function calculateScore(
   if (prediction.wickets.length > 0 && actual.wickets.length > 0) {
     prediction.wickets.forEach((player, idx) => {
       const predictedRank = idx + 1;
-      const actualIdx = actual.wickets.findIndex(
-        (a) => a.toLowerCase() === player.toLowerCase()
-      );
+      const actualIdx = actualWicketsMap.get(player.toLowerCase());
       let pts = 0;
 
-      if (actualIdx >= 0) {
+      if (actualIdx !== undefined) {
         if (actualIdx === idx) pts = scoring.wicketsExact;
         else pts = scoring.wicketsPartial;
       }
@@ -157,11 +163,12 @@ export function calculateScore(
 
   // --- Match-by-Match ---
   if (scoring.matchWinner && matchPredictions.length > 0) {
+    const matchPredMap = new Map(matchPredictions.map(p => [p.matchId, p]));
     const completedMatches = matches.filter(
       (m) => m.status === 'completed' && m.winner
     );
     for (const match of completedMatches) {
-      const mp = matchPredictions.find((p) => p.matchId === match.id);
+      const mp = matchPredMap.get(match.id);
       if (mp && mp.predictedWinner === match.winner) {
         breakdown.matches += scoring.matchWinner;
       }

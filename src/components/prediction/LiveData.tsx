@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, Trophy, Target, Zap, Award, TrendingUp, Star, ChevronUp, ChevronDown, Minus } from 'lucide-react';
 
+const DEFAULT_TEAM_COLOR = { bg: '#333', text: '#fff', accent: '#666' };
+
 interface Props {
   tournament: Tournament;
   actualResults: ActualResults | null;
@@ -20,7 +22,7 @@ export default function LiveData({ tournament, actualResults, onRefresh, isRefre
 
   const getTeamColor = (name: string) => {
     const team = teamMap.get(name);
-    return team?.color || { bg: '#333', text: '#fff', accent: '#666' };
+    return team?.color || DEFAULT_TEAM_COLOR;
   };
 
   const getTeamShort = (name: string) => {

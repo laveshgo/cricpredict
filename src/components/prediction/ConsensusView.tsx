@@ -5,6 +5,94 @@ import type { Tournament, TournamentPrediction } from '@/types';
 import { ChevronDown, ChevronUp, Trophy, Medal, TrendingDown, Zap, Target, Star, Users } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 
+type TeamColor = { bg: string; text: string; accent: string };
+type LucideIcon = typeof Trophy;
+
+const MAX_VISIBLE_VOTERS = 6;
+
+function SectionHeader({ icon: Icon, label, borderColor }: { icon: LucideIcon; label: string; borderColor: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <Icon size={14} style={{ color: 'var(--accent)' }} />
+      <span className="text-[10px] font-extrabold uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
+        {label}
+      </span>
+      <div className="flex-1 h-px" style={{ background: borderColor }} />
+    </div>
+  );
+}
+
+function VoterList({ voterKey, voters, isSmallGroup, expandedVoters, toggleVoters, expandBg }: {
+  voterKey: string; voters: string[]; isSmallGroup: boolean;
+  expandedVoters: Record<string, boolean>; toggleVoters: (key: string) => void; expandBg: string;
+}) {
+  if (!isSmallGroup) return null;
+  const isExpanded = expandedVoters[voterKey];
+  const visibleNames = voters.slice(0, MAX_VISIBLE_VOTERS);
+  const remaining = voters.length - MAX_VISIBLE_VOTERS;
+  return (
+    <>
+      <button
+        onClick={() => toggleVoters(voterKey)}
+        className="shrink-0 w-5 h-5 rounded flex items-center justify-center transition-colors"
+        style={{ background: isExpanded ? expandBg : 'transparent' }}
+      >
+        {isExpanded
+          ? <ChevronUp size={11} style={{ color: 'var(--text-muted)' }} />
+          : <ChevronDown size={11} style={{ color: 'var(--text-muted)' }} />}
+      </button>
+      {isExpanded && (
+        <div className="col-span-full mt-1 mb-1 ml-8 text-[10px] font-medium animate-fade-in" style={{ color: 'var(--gold)' }}>
+          {visibleNames.join(', ')}{remaining > 0 ? ` and ${remaining} other${remaining > 1 ? 's' : ''}` : ''}
+        </div>
+      )}
+    </>
+  );
+}
+
+function TeamBar({ team, voters, sectionKey, showPct = true, color, shortName, percentage, total, isSmallGroup, subtleBg, expandedVoters, toggleVoters, expandBg }: {
+  team: string; voters: string[]; sectionKey: string; showPct?: boolean;
+  color: TeamColor; shortName: string; percentage: number; total: number;
+  isSmallGroup: boolean; subtleBg: string;
+  expandedVoters: Record<string, boolean>; toggleVoters: (key: string) => void; expandBg: string;
+}) {
+  const voterKey = `${sectionKey}-${team}`;
+  return (
+    <div className="grid items-center gap-2" style={{ gridTemplateColumns: isSmallGroup ? '2.5rem 1fr auto auto' : '2.5rem 1fr auto' }}>
+      <div className="flex items-center justify-center rounded-md text-[9px] font-black h-6" style={{ background: color.bg, color: color.text }}>
+        {shortName}
+      </div>
+      <div className="h-5 rounded-md overflow-hidden" style={{ background: subtleBg }}>
+        <div className="h-full rounded-md transition-all duration-500" style={{ width: `${Math.max(percentage, 8)}%`, background: `linear-gradient(90deg, ${color.bg}cc, ${color.bg}55)` }} />
+      </div>
+      <span className="text-[11px] font-bold tabular-nums min-w-[2.5rem] text-right" style={{ color: showPct ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
+        {showPct ? `${percentage}%` : `${voters.length}/${total}`}
+      </span>
+      <VoterList voterKey={voterKey} voters={voters} isSmallGroup={isSmallGroup} expandedVoters={expandedVoters} toggleVoters={toggleVoters} expandBg={expandBg} />
+    </div>
+  );
+}
+
+function PlayerBar({ name, voters, sectionKey, barColor, percentage, total, isSmallGroup, subtleBg, expandedVoters, toggleVoters, expandBg }: {
+  name: string; voters: string[]; sectionKey: string; barColor: string;
+  percentage: number; total: number; isSmallGroup: boolean; subtleBg: string;
+  expandedVoters: Record<string, boolean>; toggleVoters: (key: string) => void; expandBg: string;
+}) {
+  const voterKey = `${sectionKey}-${name}`;
+  return (
+    <div className="grid items-center gap-2" style={{ gridTemplateColumns: isSmallGroup ? '6.5rem 1fr auto auto' : '6.5rem 1fr auto' }}>
+      <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>{name}</span>
+      <div className="h-4 rounded-md overflow-hidden" style={{ background: subtleBg }}>
+        <div className="h-full rounded-md transition-all duration-500" style={{ width: `${Math.max(percentage, 8)}%`, background: barColor, opacity: 0.75 }} />
+      </div>
+      <span className="text-[10px] font-bold tabular-nums min-w-[2rem] text-right" style={{ color: 'var(--text-secondary)' }}>
+        {voters.length}/{total}
+      </span>
+      <VoterList voterKey={voterKey} voters={voters} isSmallGroup={isSmallGroup} expandedVoters={expandedVoters} toggleVoters={toggleVoters} expandBg={expandBg} />
+    </div>
+  );
+}
+
 interface Props {
   predictions: TournamentPrediction[];
   tournament: Tournament;
@@ -27,9 +115,8 @@ export default function ConsensusView({ predictions, tournament }: Props) {
     );
   }
 
-  // O(1) lookups instead of linear .find() on every call
   const teamMap = useMemo(() => new Map(tournament.teams.map(t => [t.name, t])), [tournament.teams]);
-  const defaultColor = { bg: '#555', text: '#fff', accent: '#666' };
+  const defaultColor: TeamColor = { bg: '#555', text: '#fff', accent: '#666' };
   const getTeamColor = (name: string) => teamMap.get(name)?.color || defaultColor;
   const getTeamShort = (name: string) => teamMap.get(name)?.shortName || name;
 
@@ -39,7 +126,6 @@ export default function ConsensusView({ predictions, tournament }: Props) {
     setExpandedVoters((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // ─── Memoized aggregation — only recalculates when predictions/tournament change ───
   const { winnerSorted, ruSorted, avgRanking, top4Sorted, lastPlaceSorted, runsSorted, wicketsSorted, mvpSorted } = useMemo(() => {
     // Winner
     const winnerVoters: Record<string, string[]> = {};
@@ -91,21 +177,29 @@ export default function ConsensusView({ predictions, tournament }: Props) {
       }
     });
 
-    // Runs
+    // Runs — use Set for O(1) dedup
     const runsVoters: Record<string, string[]> = {};
+    const runsVoterSets: Record<string, Set<string>> = {};
     predictions.forEach((p) => {
       p.runs.filter(Boolean).forEach((player) => {
-        if (!runsVoters[player]) runsVoters[player] = [];
-        if (!runsVoters[player].includes(p.userName)) runsVoters[player].push(p.userName);
+        if (!runsVoterSets[player]) { runsVoterSets[player] = new Set(); runsVoters[player] = []; }
+        if (!runsVoterSets[player].has(p.userName)) {
+          runsVoterSets[player].add(p.userName);
+          runsVoters[player].push(p.userName);
+        }
       });
     });
 
-    // Wickets
+    // Wickets — use Set for O(1) dedup
     const wicketsVoters: Record<string, string[]> = {};
+    const wicketsVoterSets: Record<string, Set<string>> = {};
     predictions.forEach((p) => {
       p.wickets.filter(Boolean).forEach((player) => {
-        if (!wicketsVoters[player]) wicketsVoters[player] = [];
-        if (!wicketsVoters[player].includes(p.userName)) wicketsVoters[player].push(p.userName);
+        if (!wicketsVoterSets[player]) { wicketsVoterSets[player] = new Set(); wicketsVoters[player] = []; }
+        if (!wicketsVoterSets[player].has(p.userName)) {
+          wicketsVoterSets[player].add(p.userName);
+          wicketsVoters[player].push(p.userName);
+        }
       });
     });
 
@@ -130,118 +224,22 @@ export default function ConsensusView({ predictions, tournament }: Props) {
     };
   }, [predictions, tournament]);
 
-  // Most controversial pick — smallest majority for winner
   const controversialTeam = winnerSorted.length >= 2
     ? { top: winnerSorted[0], second: winnerSorted[1], spread: winnerSorted[0][1].length - winnerSorted[1][1].length }
     : null;
 
-  // Unanimous picks — anyone picked by 100%
   const unanimousWinner = winnerSorted.find(([, v]) => v.length === total);
   const unanimousRU = ruSorted.find(([, v]) => v.length === total);
 
-  // ─── Helpers ───
   const pct = (count: number) => Math.round((count / total) * 100);
 
-  // Theme-aware subtle colors
   const subtleBg = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)';
   const subtleBorder = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
   const subtleDivider = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)';
   const expandBg = isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)';
-
-  const SectionHeader = ({ icon: Icon, label }: { icon: typeof Trophy; label: string }) => (
-    <div className="flex items-center gap-2 mb-3">
-      <Icon size={14} style={{ color: 'var(--accent)' }} />
-      <span className="text-[10px] font-extrabold uppercase tracking-widest" style={{ color: 'var(--text-secondary)' }}>
-        {label}
-      </span>
-      <div className="flex-1 h-px" style={{ background: subtleBorder }} />
-    </div>
-  );
-
-  const MAX_VISIBLE_VOTERS = 6;
   const isSmallGroup = total <= 20;
 
-  const VoterList = ({ voterKey, voters }: { voterKey: string; voters: string[] }) => {
-    // Don't show expand button for large groups — just the count is enough
-    if (!isSmallGroup) return null;
-
-    const isExpanded = expandedVoters[voterKey];
-    const visibleNames = voters.slice(0, MAX_VISIBLE_VOTERS);
-    const remaining = voters.length - MAX_VISIBLE_VOTERS;
-
-    return (
-      <>
-        <button
-          onClick={() => toggleVoters(voterKey)}
-          className="shrink-0 w-5 h-5 rounded flex items-center justify-center transition-colors"
-          style={{ background: isExpanded ? expandBg : 'transparent' }}
-        >
-          {isExpanded
-            ? <ChevronUp size={11} style={{ color: 'var(--text-muted)' }} />
-            : <ChevronDown size={11} style={{ color: 'var(--text-muted)' }} />}
-        </button>
-        {isExpanded && (
-          <div className="col-span-full mt-1 mb-1 ml-8 text-[10px] font-medium animate-fade-in" style={{ color: 'var(--gold)' }}>
-            {visibleNames.join(', ')}{remaining > 0 ? ` and ${remaining} other${remaining > 1 ? 's' : ''}` : ''}
-          </div>
-        )}
-      </>
-    );
-  };
-
-  const TeamBar = ({ team, voters, sectionKey, showPct = true }: { team: string; voters: string[]; sectionKey: string; showPct?: boolean }) => {
-    const color = getTeamColor(team);
-    const percentage = pct(voters.length);
-    const voterKey = `${sectionKey}-${team}`;
-    return (
-      <div className="grid items-center gap-2" style={{ gridTemplateColumns: isSmallGroup ? '2.5rem 1fr auto auto' : '2.5rem 1fr auto' }}>
-        {/* Team badge */}
-        <div
-          className="flex items-center justify-center rounded-md text-[9px] font-black h-6"
-          style={{ background: color.bg, color: color.text }}
-        >
-          {getTeamShort(team)}
-        </div>
-        {/* Bar */}
-        <div className="h-5 rounded-md overflow-hidden" style={{ background: subtleBg }}>
-          <div
-            className="h-full rounded-md transition-all duration-500"
-            style={{
-              width: `${Math.max(percentage, 8)}%`,
-              background: `linear-gradient(90deg, ${color.bg}cc, ${color.bg}55)`,
-            }}
-          />
-        </div>
-        {/* Count */}
-        <span className="text-[11px] font-bold tabular-nums min-w-[2.5rem] text-right" style={{ color: showPct ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-          {showPct ? `${percentage}%` : `${voters.length}/${total}`}
-        </span>
-        <VoterList voterKey={voterKey} voters={voters} />
-      </div>
-    );
-  };
-
-  const PlayerBar = ({ name, voters, sectionKey, barColor }: { name: string; voters: string[]; sectionKey: string; barColor: string }) => {
-    const percentage = pct(voters.length);
-    const voterKey = `${sectionKey}-${name}`;
-    return (
-      <div className="grid items-center gap-2" style={{ gridTemplateColumns: isSmallGroup ? '6.5rem 1fr auto auto' : '6.5rem 1fr auto' }}>
-        <span className="text-[11px] font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
-          {name}
-        </span>
-        <div className="h-4 rounded-md overflow-hidden" style={{ background: subtleBg }}>
-          <div
-            className="h-full rounded-md transition-all duration-500"
-            style={{ width: `${Math.max(percentage, 8)}%`, background: barColor, opacity: 0.75 }}
-          />
-        </div>
-        <span className="text-[10px] font-bold tabular-nums min-w-[2rem] text-right" style={{ color: 'var(--text-secondary)' }}>
-          {voters.length}/{total}
-        </span>
-        <VoterList voterKey={voterKey} voters={voters} />
-      </div>
-    );
-  };
+  const sharedBarProps = { isSmallGroup, subtleBg, expandedVoters, toggleVoters, expandBg };
 
   return (
     <div className="space-y-6">
@@ -288,7 +286,7 @@ export default function ConsensusView({ predictions, tournament }: Props) {
 
       {/* ─── Consensus Ranking ─── */}
       <div>
-        <SectionHeader icon={Target} label="Consensus Ranking" />
+        <SectionHeader icon={Target} label="Consensus Ranking" borderColor={subtleBorder} />
         <div
           className="rounded-xl overflow-hidden"
           style={{ border: `1px solid ${subtleBorder}` }}
@@ -341,10 +339,10 @@ export default function ConsensusView({ predictions, tournament }: Props) {
 
       {/* ─── Top 4 Qualifiers ─── */}
       <div>
-        <SectionHeader icon={Zap} label="Playoff Qualifiers" />
+        <SectionHeader icon={Zap} label="Playoff Qualifiers" borderColor={subtleBorder} />
         <div className="space-y-1.5">
           {top4Sorted.map(([team, voters]) => (
-            <TeamBar key={team} team={team} voters={voters} sectionKey="top4" />
+            <TeamBar key={team} team={team} voters={voters} sectionKey="top4" color={getTeamColor(team)} shortName={getTeamShort(team)} percentage={pct(voters.length)} total={total} {...sharedBarProps} />
           ))}
         </div>
       </div>
@@ -352,18 +350,18 @@ export default function ConsensusView({ predictions, tournament }: Props) {
       {/* ─── Winner & Runner-up ─── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <SectionHeader icon={Trophy} label="Winner Picks" />
+          <SectionHeader icon={Trophy} label="Winner Picks" borderColor={subtleBorder} />
           <div className="space-y-1.5">
             {winnerSorted.map(([team, voters]) => (
-              <TeamBar key={team} team={team} voters={voters} sectionKey="winner" />
+              <TeamBar key={team} team={team} voters={voters} sectionKey="winner" color={getTeamColor(team)} shortName={getTeamShort(team)} percentage={pct(voters.length)} total={total} {...sharedBarProps} />
             ))}
           </div>
         </div>
         <div>
-          <SectionHeader icon={Medal} label="Runner-up Picks" />
+          <SectionHeader icon={Medal} label="Runner-up Picks" borderColor={subtleBorder} />
           <div className="space-y-1.5">
             {ruSorted.map(([team, voters]) => (
-              <TeamBar key={team} team={team} voters={voters} sectionKey="ru" />
+              <TeamBar key={team} team={team} voters={voters} sectionKey="ru" color={getTeamColor(team)} shortName={getTeamShort(team)} percentage={pct(voters.length)} total={total} {...sharedBarProps} />
             ))}
           </div>
         </div>
@@ -372,10 +370,10 @@ export default function ConsensusView({ predictions, tournament }: Props) {
       {/* ─── Last Place ─── */}
       {lastPlaceSorted.length > 0 && (
         <div>
-          <SectionHeader icon={TrendingDown} label="Predicted Last Place" />
+          <SectionHeader icon={TrendingDown} label="Predicted Last Place" borderColor={subtleBorder} />
           <div className="space-y-1.5">
             {lastPlaceSorted.map(([team, voters]) => (
-              <TeamBar key={team} team={team} voters={voters} sectionKey="last" />
+              <TeamBar key={team} team={team} voters={voters} sectionKey="last" color={getTeamColor(team)} shortName={getTeamShort(team)} percentage={pct(voters.length)} total={total} {...sharedBarProps} />
             ))}
           </div>
         </div>
@@ -385,20 +383,20 @@ export default function ConsensusView({ predictions, tournament }: Props) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {runsSorted.length > 0 && (
           <div>
-            <SectionHeader icon={Target} label="Most Picked Run Scorers" />
+            <SectionHeader icon={Target} label="Most Picked Run Scorers" borderColor={subtleBorder} />
             <div className="space-y-1.5">
               {runsSorted.map(([name, voters]) => (
-                <PlayerBar key={name} name={name} voters={voters} sectionKey="runs" barColor="#62B4FF" />
+                <PlayerBar key={name} name={name} voters={voters} sectionKey="runs" barColor="#62B4FF" percentage={pct(voters.length)} total={total} {...sharedBarProps} />
               ))}
             </div>
           </div>
         )}
         {wicketsSorted.length > 0 && (
           <div>
-            <SectionHeader icon={Zap} label="Most Picked Wicket Takers" />
+            <SectionHeader icon={Zap} label="Most Picked Wicket Takers" borderColor={subtleBorder} />
             <div className="space-y-1.5">
               {wicketsSorted.map(([name, voters]) => (
-                <PlayerBar key={name} name={name} voters={voters} sectionKey="wickets" barColor="#A78BFA" />
+                <PlayerBar key={name} name={name} voters={voters} sectionKey="wickets" barColor="#A78BFA" percentage={pct(voters.length)} total={total} {...sharedBarProps} />
               ))}
             </div>
           </div>
@@ -408,10 +406,10 @@ export default function ConsensusView({ predictions, tournament }: Props) {
       {/* ─── MVP ─── */}
       {mvpSorted.length > 0 && (
         <div>
-          <SectionHeader icon={Star} label="MVP Picks" />
+          <SectionHeader icon={Star} label="MVP Picks" borderColor={subtleBorder} />
           <div className="space-y-1.5">
             {mvpSorted.map(([name, voters]) => (
-              <PlayerBar key={name} name={name} voters={voters} sectionKey="mvp" barColor="#FFD700" />
+              <PlayerBar key={name} name={name} voters={voters} sectionKey="mvp" barColor="#FFD700" percentage={pct(voters.length)} total={total} {...sharedBarProps} />
             ))}
           </div>
         </div>

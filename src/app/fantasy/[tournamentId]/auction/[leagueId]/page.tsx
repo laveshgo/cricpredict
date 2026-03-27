@@ -170,6 +170,11 @@ export default function AuctionRoomPage() {
     prevPlayerIdRef.current = pid;
   }, [auction?.currentPlayer?.playerId]);
 
+  // ─── Derived state ───
+  const isAdmin = league?.createdBy === user?.uid;
+  const isAdminRef = useRef(isAdmin);
+  isAdminRef.current = isAdmin;
+
   // ─── Countdown timer ───
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -185,8 +190,7 @@ export default function AuctionRoomPage() {
       const remaining = Math.max(0, Math.ceil((endTime - now) / 1000));
       setTimeLeft(remaining);
 
-      // Auto-sell when timer hits 0 (admin only, with guard)
-      if (remaining <= 0 && isAdmin && !sellingRef.current) {
+      if (remaining <= 0 && isAdminRef.current && !sellingRef.current) {
         sellingRef.current = true;
         soldAndNext(leagueId)
           .catch(console.error)
@@ -201,20 +205,28 @@ export default function AuctionRoomPage() {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [auction?.timerEndsAt, auction?.status, leagueId]);
-
-  // ─── Derived state ───
-  const isAdmin = league?.createdBy === user?.uid;
   const myBudget = auction?.budgets[user?.uid || ''];
   const hasPassed = auction?.passedUserIds.includes(user?.uid || '') ?? false;
   const isHighestBidder = auction?.currentBidderId === user?.uid;
   const nextBidAmount = auction ? auction.currentBid + auction.bidIncrement : 0;
   const rules: AuctionRules = auction?.rules || DEFAULT_AUCTION_RULES;
 
-  // My players from sold list
+  // Pre-group sold players by buyer for O(1) lookups
+  const soldByUser = useMemo(() => {
+    const map = new Map<string, typeof auction extends null ? never : NonNullable<typeof auction>['soldPlayers']>();
+    if (!auction) return map;
+    for (const p of auction.soldPlayers) {
+      const arr = map.get(p.boughtBy);
+      if (arr) arr.push(p);
+      else map.set(p.boughtBy, [p]);
+    }
+    return map;
+  }, [auction]);
+
   const myPlayers = useMemo(() => {
-    if (!auction || !user) return [];
-    return auction.soldPlayers.filter(p => p.boughtBy === user.uid);
-  }, [auction, user]);
+    if (!user) return [];
+    return soldByUser.get(user.uid) || [];
+  }, [soldByUser, user]);
 
   // My squad composition stats
   const mySquadStats = useMemo(() => {
@@ -412,11 +424,20 @@ export default function AuctionRoomPage() {
     for (const p of auction.playerOrder) playerOrderMap.set(p.playerId, p);
     // Fallback: build AuctionPlayer entries from the full fantasy pool for any missing players
     const fullPool = getFantasyPlayerPool();
+    const poolByRole = new Map<string, typeof fullPool>();
+    for (const fp of fullPool) {
+      const arr = poolByRole.get(fp.role);
+      if (arr) arr.push(fp);
+      else poolByRole.set(fp.role, [fp]);
+    }
+    const roleRankMap = new Map<string, number>();
+    for (const [, rolePlayers] of poolByRole) {
+      rolePlayers.sort((a, b) => b.price - a.price);
+      rolePlayers.forEach((p, i) => roleRankMap.set(p.id, i));
+    }
     for (const fp of fullPool) {
       if (!playerOrderMap.has(fp.id)) {
-        // Determine which set this player belongs to
-        const rolePlayers = fullPool.filter(p => p.role === fp.role).sort((a, b) => b.price - a.price);
-        const idx = rolePlayers.findIndex(p => p.id === fp.id);
+        const idx = roleRankMap.get(fp.id) ?? 99;
         const tier = idx < 10 ? 'marquee' : idx < 20 ? 'set2' : 'set3';
         const setKey = `${tier}_${fp.role.toLowerCase()}` as keyof typeof AUCTION_SETS;
         const setConfig = AUCTION_SETS[setKey];
@@ -544,7 +565,7 @@ export default function AuctionRoomPage() {
                   .map(([mUid, budget]) => {
                     const memberInfo = league?.members?.[mUid];
                     const isMe = mUid === uid;
-                    const mPlayersRaw = auction.soldPlayers.filter(p => p.boughtBy === mUid);
+                    const mPlayersRaw = soldByUser.get(mUid) || [];
                     const mSeenIds = new Set<string>();
                     const mPlayers = mPlayersRaw.filter(p => { if (mSeenIds.has(p.playerId)) return false; mSeenIds.add(p.playerId); return true; });
                     const mSpotsLeft = auction.maxSquadSize - budget.playerCount;
@@ -1268,7 +1289,7 @@ export default function AuctionRoomPage() {
             .map(([uid, budget]) => {
               const memberInfo = league?.members?.[uid];
               const isMe = uid === user?.uid;
-              const userPlayers = auction.soldPlayers.filter(p => p.boughtBy === uid);
+              const userPlayers = soldByUser.get(uid) || [];
               const isExpanded = expandedBudgetUser === uid;
               return (
                 <div key={uid}>
@@ -1509,8 +1530,13 @@ export default function AuctionRoomPage() {
                 <div className="pt-2 border-t border-[var(--border)]">
                   <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider px-3 mb-1">Unsold</div>
                   {[...new Set(auction.unsoldPlayers)].map((pid) => {
-                    const playerInfo = auction.playerOrder.find(p => p.playerId === pid)
-                      || (() => { const fp = getFantasyPlayerPool().find(p => p.id === pid); return fp ? { playerId: fp.id, name: fp.name, team: fp.team, teamShort: fp.teamShort, role: fp.role, isForeign: fp.isForeign } as AuctionPlayer : null; })();
+                    const fromOrder = auction.playerOrder.find(p => p.playerId === pid);
+                    const playerInfo: AuctionPlayer | null = fromOrder ?? (() => {
+                      const pool = getFantasyPlayerPool();
+                      const poolMap = new Map(pool.map(p => [p.id, p]));
+                      const fp = poolMap.get(pid);
+                      return fp ? { playerId: fp.id, name: fp.name, team: fp.team, teamShort: fp.teamShort, role: fp.role, isForeign: fp.isForeign } as AuctionPlayer : null;
+                    })();
                     if (!playerInfo) return null;
                     return (
                       <div key={pid} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-[var(--bg-elevated)] opacity-50">

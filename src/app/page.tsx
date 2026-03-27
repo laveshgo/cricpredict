@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { getTournaments, getUserGroups } from '@/lib/firestore';
 import { getAllUserFantasyLeagues } from '@/lib/fantasy-firestore';
@@ -177,7 +177,8 @@ export default function HomePage() {
       .finally(() => setUserDataLoading(false));
   }, [authLoading, user]);
 
-  // Tournaments show as soon as they load; user sections show their own loading state
+  const tournamentMap = useMemo(() => new Map(tournaments.map(t => [t.id, t])), [tournaments]);
+
   const loading = tournamentsLoading;
 
   // Hero section for signed-out users
@@ -291,7 +292,7 @@ export default function HomePage() {
             ) : (
               <div className="px-4 pb-1">
                 {myGroups.map((g, i) => {
-                  const t = tournaments.find(tr => tr.id === g.tournamentId);
+                  const t = tournamentMap.get(g.tournamentId);
                   const members = g.memberUids?.length || 0;
                   return (
                     <Link key={g.id} href={`/group/${g.id}`}>
@@ -355,7 +356,7 @@ export default function HomePage() {
             ) : (
               <div className="px-4 pb-1">
                 {myFantasyLeagues.map((league, i) => {
-                  const t = tournaments.find(tr => tr.id === league.tournamentId);
+                  const t = tournamentMap.get(league.tournamentId);
                   const s = league.auctionStatus;
                   const statusCfg = s === 'live' ? { label: 'Live', cls: 'bg-red-500/15 text-red-400', dot: 'bg-red-400 animate-pulse' }
                     : s === 'paused' ? { label: 'Paused', cls: 'bg-yellow-500/15 text-yellow-500', dot: 'bg-yellow-500' }

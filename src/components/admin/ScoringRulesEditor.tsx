@@ -7,6 +7,36 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Save, Trophy, Target, Zap, Award, Swords, Calculator } from 'lucide-react';
 
+type LucideIcon = typeof Trophy;
+
+function Field({ label, configKey, icon: Icon, value, onChange, disabled }: {
+  label: string; configKey: keyof ScoringConfig; icon?: LucideIcon;
+  value: number; onChange: (key: keyof ScoringConfig, val: number) => void; disabled: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        {Icon && <Icon size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
+        <span className="text-sm text-[var(--text-primary)]">{label}</span>
+      </div>
+      <input
+        type="number"
+        min={0}
+        max={100}
+        value={value}
+        onChange={(e) => onChange(configKey, parseInt(e.target.value) || 0)}
+        disabled={disabled}
+        className="w-20 px-3 py-1.5 rounded-lg text-sm text-center font-bold outline-none transition-colors"
+        style={{
+          background: 'var(--bg-primary)',
+          color: 'var(--text-primary)',
+          border: '1px solid var(--accent-dim)',
+        }}
+      />
+    </div>
+  );
+}
+
 interface Props {
   scoring: ScoringConfig;
   onSave: (scoring: ScoringConfig) => Promise<void>;
@@ -39,9 +69,8 @@ export default function ScoringRulesEditor({ scoring, onSave, isTournamentCreato
     setSaved(false);
   };
 
-  // Calculate max possible points
   const maxPossible = (() => {
-    const teamCount = 10; // IPL teams
+    const teamCount = 10;
     const rankMax = teamCount * config.rankExact;
     const winnerMax = config.winner;
     const ruMax = config.runnerUp;
@@ -50,29 +79,8 @@ export default function ScoringRulesEditor({ scoring, onSave, isTournamentCreato
     const mvpMax = config.mvp;
     return rankMax + winnerMax + ruMax + runsMax + wicketsMax + mvpMax;
   })();
-
-  const Field = ({ label, configKey, icon: Icon }: { label: string; configKey: keyof ScoringConfig; icon?: typeof Trophy }) => (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div className="flex items-center gap-2 flex-1 min-w-0">
-        {Icon && <Icon size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />}
-        <span className="text-sm text-[var(--text-primary)]">{label}</span>
-      </div>
-      <input
-        type="number"
-        min={0}
-        max={100}
-        value={config[configKey] ?? 0}
-        onChange={(e) => update(configKey, parseInt(e.target.value) || 0)}
-        disabled={!isTournamentCreator}
-        className="w-20 px-3 py-1.5 rounded-lg text-sm text-center font-bold outline-none transition-colors"
-        style={{
-          background: 'var(--bg-primary)',
-          color: 'var(--text-primary)',
-          border: '1px solid var(--accent-dim)',
-        }}
-      />
-    </div>
-  );
+  
+  const disabled = !isTournamentCreator;
 
   return (
     <div className="space-y-4">
@@ -114,9 +122,9 @@ export default function ScoringRulesEditor({ scoring, onSave, isTournamentCreato
           <CardDescription className="text-xs">Points for predicting correct team positions</CardDescription>
         </CardHeader>
         <CardContent>
-          <Field label="Exact position match" configKey="rankExact" />
-          <Field label="Off by 1 position" configKey="rankOff1" />
-          <Field label="Off by 2 positions" configKey="rankOff2" />
+          <Field label="Exact position match" configKey="rankExact" value={config.rankExact ?? 0} onChange={update} disabled={disabled} />
+          <Field label="Off by 1 position" configKey="rankOff1" value={config.rankOff1 ?? 0} onChange={update} disabled={disabled} />
+          <Field label="Off by 2 positions" configKey="rankOff2" value={config.rankOff2 ?? 0} onChange={update} disabled={disabled} />
         </CardContent>
       </Card>
 
@@ -128,8 +136,8 @@ export default function ScoringRulesEditor({ scoring, onSave, isTournamentCreato
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Field label="Correct Winner" configKey="winner" />
-          <Field label="Correct Runner-up" configKey="runnerUp" />
+          <Field label="Correct Winner" configKey="winner" value={config.winner ?? 0} onChange={update} disabled={disabled} />
+          <Field label="Correct Runner-up" configKey="runnerUp" value={config.runnerUp ?? 0} onChange={update} disabled={disabled} />
         </CardContent>
       </Card>
 
@@ -141,8 +149,8 @@ export default function ScoringRulesEditor({ scoring, onSave, isTournamentCreato
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Field label="Correct player in exact position" configKey="runsExact" />
-          <Field label="Correct player, wrong position" configKey="runsPartial" />
+          <Field label="Correct player in exact position" configKey="runsExact" value={config.runsExact ?? 0} onChange={update} disabled={disabled} />
+          <Field label="Correct player, wrong position" configKey="runsPartial" value={config.runsPartial ?? 0} onChange={update} disabled={disabled} />
         </CardContent>
       </Card>
 
@@ -154,8 +162,8 @@ export default function ScoringRulesEditor({ scoring, onSave, isTournamentCreato
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Field label="Correct player in exact position" configKey="wicketsExact" />
-          <Field label="Correct player, wrong position" configKey="wicketsPartial" />
+          <Field label="Correct player in exact position" configKey="wicketsExact" value={config.wicketsExact ?? 0} onChange={update} disabled={disabled} />
+          <Field label="Correct player, wrong position" configKey="wicketsPartial" value={config.wicketsPartial ?? 0} onChange={update} disabled={disabled} />
         </CardContent>
       </Card>
 
@@ -167,8 +175,8 @@ export default function ScoringRulesEditor({ scoring, onSave, isTournamentCreato
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Field label="Correct MVP pick" configKey="mvp" />
-          <Field label="Correct match winner (per match)" configKey="matchWinner" />
+          <Field label="Correct MVP pick" configKey="mvp" value={config.mvp ?? 0} onChange={update} disabled={disabled} />
+          <Field label="Correct match winner (per match)" configKey="matchWinner" value={config.matchWinner ?? 0} onChange={update} disabled={disabled} />
         </CardContent>
       </Card>
 

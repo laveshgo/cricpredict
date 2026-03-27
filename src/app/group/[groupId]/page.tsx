@@ -112,27 +112,23 @@ export default function GroupPage() {
     return () => unsub();
   }, [groupId, authLoading, user]);
 
-  // Load tournament + initial data (once per group)
+  // Load tournament + initial data (once per group) — all in parallel
   const loadData = async () => {
     if (!group || !user) return;
     setLoading(true);
     try {
-      const t = await getTournament(group.tournamentId);
+      const [t, pred, m, allMatchPreds, memberList] = await Promise.all([
+        getTournament(group.tournamentId),
+        getPrediction(groupId, group.tournamentId, user.uid),
+        getMatches(group.tournamentId),
+        getAllMatchPredictionsForGroup(groupId),
+        getGroupMembers(groupId),
+      ]);
       setTournament(t);
-
-      const pred = await getPrediction(groupId, group.tournamentId, user.uid);
       setMyPrediction(pred);
-
-      const m = await getMatches(group.tournamentId);
       setMatches(m);
-
-      const allMatchPreds = await getAllMatchPredictionsForGroup(groupId);
       setAllMatchPredictions(allMatchPreds);
-
-      const memberList = await getGroupMembers(groupId);
       setMembers(memberList);
-
-      // Admin ranking is now managed inside AdminTab
     } catch (err) {
       console.error(err);
     } finally {
@@ -188,6 +184,21 @@ export default function GroupPage() {
   const canEditResults = isGroupAdmin;
   const isMember = group?.memberUids?.includes(user?.uid || '') || false;
 
+  // Memoize tabs — must be before early returns to satisfy hook rules
+  const visibleTabs = useMemo(() => {
+    const allTabs: { key: Tab; label: string; icon: typeof Trophy; show: boolean }[] = [
+      { key: 'predict', label: 'Predict', icon: ClipboardList, show: true },
+      { key: 'predictions', label: 'All Picks', icon: Eye, show: allPredictions.length > 0 },
+      { key: 'consensus', label: 'Consensus', icon: PieChart, show: allPredictions.length > 0 },
+      { key: 'leaderboard', label: 'Leaderboard', icon: BarChart3, show: true },
+      { key: 'live', label: 'Live', icon: TrendingUp, show: true },
+      { key: 'admin', label: 'Admin', icon: Shield, show: canEditResults },
+    ];
+    return allTabs.filter((t) => t.show);
+  }, [allPredictions.length, canEditResults]);
+
+  const predictionByUser = useMemo(() => new Map(allPredictions.map(p => [p.userId, p])), [allPredictions]);
+
   const handleJoinGroup = async () => {
     if (!user || isMember) return;
     setJoining(true);
@@ -218,21 +229,25 @@ export default function GroupPage() {
     }
   };
 
-  // Calculate leaderboard (memoized)
   const leaderboard: LeaderboardEntry[] = useMemo(() => {
     if (!actualResults || !tournament) return [];
-    return allPredictions.map((pred) => {
-      const userMatchPreds = allMatchPredictions.filter(mp => mp.userId === pred.userId);
-      return {
-        userId: pred.userId,
-        userName: pred.userName,
-        photoURL: undefined,
-        score: calculateScore(pred, actualResults, tournament.scoring, userMatchPreds, matches),
-      };
-    });
+    const matchPredsByUser = new Map<string, typeof allMatchPredictions>();
+    for (const mp of allMatchPredictions) {
+      const existing = matchPredsByUser.get(mp.userId);
+      if (existing) existing.push(mp);
+      else matchPredsByUser.set(mp.userId, [mp]);
+    }
+    return allPredictions.map((pred) => ({
+      userId: pred.userId,
+      userName: pred.userName,
+      photoURL: undefined,
+      score: calculateScore(pred, actualResults, tournament.scoring, matchPredsByUser.get(pred.userId) || [], matches),
+    }));
   }, [actualResults, tournament, allPredictions, allMatchPredictions, matches]);
 
-  const handleSavePrediction = async (
+  const leaderboardByUser = useMemo(() => new Map(leaderboard.map(e => [e.userId, e])), [leaderboard]);
+
+  const handleSavePrediction = useCallback(async (
     data: Pick<TournamentPrediction, 'teamRanking' | 'winner' | 'runnerUp' | 'runs' | 'wickets' | 'mvp'>
   ) => {
     if (!user || !group || !tournament) return;
@@ -260,7 +275,7 @@ export default function GroupPage() {
     } catch (err: any) {
       setSaveMsg('Error: ' + (err.message || 'Failed to save'));
     }
-  };
+  }, [user, group, tournament, myPrediction?.id, groupId, profile?.displayName]);
 
   // Cricbuzz fetch — returns parsed data so callers can use it directly
   interface CricbuzzParsed {
@@ -547,27 +562,14 @@ export default function GroupPage() {
     );
   }
 
-  const allTabs: { key: Tab; label: string; icon: typeof Trophy; show: boolean }[] = [
-    { key: 'predict', label: 'Predict', icon: ClipboardList, show: true },
-    { key: 'predictions', label: 'All Picks', icon: Eye, show: allPredictions.length > 0 },
-    { key: 'consensus', label: 'Consensus', icon: PieChart, show: allPredictions.length > 0 },
-    { key: 'leaderboard', label: 'Leaderboard', icon: BarChart3, show: true },
-    { key: 'live', label: 'Live', icon: TrendingUp, show: true },
-    { key: 'admin', label: 'Admin', icon: Shield, show: canEditResults },
-  ];
+  const selectedPrediction = selectedUserId ? predictionByUser.get(selectedUserId) ?? null : null;
+  const selectedScore = selectedUserId ? leaderboardByUser.get(selectedUserId)?.score ?? null : null;
 
-  const visibleTabs = allTabs.filter((t) => t.show);
-
-  // For leaderboard breakdown
-  const selectedPrediction = selectedUserId ? allPredictions.find(p => p.userId === selectedUserId) : null;
-  const selectedScore = selectedUserId ? leaderboard.find(e => e.userId === selectedUserId)?.score : null;
-
-  // For compare
   const comparePredictions = compareUserIds
-    ? [allPredictions.find(p => p.userId === compareUserIds[0])!, allPredictions.find(p => p.userId === compareUserIds[1])!]
+    ? [predictionByUser.get(compareUserIds[0])!, predictionByUser.get(compareUserIds[1])!]
     : null;
   const compareScores = compareUserIds
-    ? [leaderboard.find(e => e.userId === compareUserIds[0])?.score!, leaderboard.find(e => e.userId === compareUserIds[1])?.score!]
+    ? [leaderboardByUser.get(compareUserIds[0])?.score!, leaderboardByUser.get(compareUserIds[1])?.score!]
     : null;
 
   return (

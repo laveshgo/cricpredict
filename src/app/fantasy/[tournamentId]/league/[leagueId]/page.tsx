@@ -491,12 +491,18 @@ export default function FantasyLeaguePage() {
     const playerPool = getFantasyPlayerPool();
     const foreignLookup = new Map(playerPool.map(p => [p.name, p.isForeign]));
 
-    // Sort users by most players (or by spent) for ranking feel
+    const soldByUser = new Map<string, typeof auctionState.soldPlayers>();
+    for (const p of auctionState.soldPlayers) {
+      const arr = soldByUser.get(p.boughtBy);
+      if (arr) arr.push(p);
+      else soldByUser.set(p.boughtBy, [p]);
+    }
+
     const sortedUsers = Object.entries(auctionState.budgets)
       .map(([uid, budget]) => ({
         uid,
         budget,
-        players: auctionState.soldPlayers.filter(p => p.boughtBy === uid),
+        players: soldByUser.get(uid) || [],
         memberInfo: league.members?.[uid],
       }))
       .sort((a, b) => b.players.length - a.players.length || b.budget.spent - a.budget.spent);

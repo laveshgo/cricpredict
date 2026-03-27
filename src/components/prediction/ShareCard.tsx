@@ -1,10 +1,11 @@
 'use client';
 
 import { useRef, useState, useMemo } from 'react';
-import html2canvas from 'html2canvas';
 import type { Tournament, TournamentPrediction } from '@/types';
 import { Download, Share2, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+
+const DEFAULT_TEAM_COLOR = { bg: '#333', text: '#fff', accent: '#666' };
 
 interface Props {
   prediction: TournamentPrediction;
@@ -21,7 +22,7 @@ export default function ShareCard({ prediction, tournament, groupName, onClose }
 
   const getTeamColor = (name: string) => {
     const team = teamMap.get(name);
-    return team?.color || { bg: '#333', text: '#fff', accent: '#666' };
+    return team?.color || DEFAULT_TEAM_COLOR;
   };
 
   const getTeamShort = (name: string) => {
@@ -35,6 +36,7 @@ export default function ShareCard({ prediction, tournament, groupName, onClose }
     setGenerating(true);
 
     try {
+      const { default: html2canvas } = await import('html2canvas');
       const canvas = await html2canvas(cardRef.current, {
         backgroundColor: null,
         scale: 2, // Retina quality

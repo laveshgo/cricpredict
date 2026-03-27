@@ -90,16 +90,15 @@ export default function TournamentPage() {
     if (authLoading || !user) return;
     (async () => {
       try {
-        // Fetch prediction groups
-        const pg = await getGroupsForTournament(tournamentId);
+        const [pg, ug, myFL, pubFL] = await Promise.all([
+          getGroupsForTournament(tournamentId),
+          getUserGroups(user.uid),
+          getUserFantasyLeagues(tournamentId, user.uid),
+          getFantasyLeaguesByTournament(tournamentId),
+        ]);
         setPublicGroups(pg);
-        const ug = await getUserGroups(user.uid);
         setMyGroups(ug.filter((g) => g.tournamentId === tournamentId));
-
-        // Fetch fantasy leagues
-        const myFL = await getUserFantasyLeagues(tournamentId, user.uid);
         setMyFantasyLeagues(myFL);
-        const pubFL = await getFantasyLeaguesByTournament(tournamentId);
         setPublicFantasyLeagues(pubFL);
       } catch (err) {
         console.error(err);

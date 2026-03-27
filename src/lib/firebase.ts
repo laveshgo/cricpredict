@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -12,10 +12,20 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase (prevent double init in dev with hot reload)
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const isNewApp = !getApps().length;
+const app = isNewApp ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Firestore with offline persistence — cached data loads instantly on return
+// visits while fresh data syncs in the background.
+// initializeFirestore can only be called once per app; on hot reload use getFirestore.
+export const db = isNewApp
+  ? initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    })
+  : getFirestore(app);
+
 export const googleProvider = new GoogleAuthProvider();
 
 export default app;

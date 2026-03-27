@@ -5,6 +5,30 @@ import type { TournamentPrediction, ActualResults, Tournament, ScoreBreakdown as
 import { Badge } from '@/components/ui/badge';
 import { Check, X } from 'lucide-react';
 
+const DEFAULT_TEAM_COLOR = { bg: '#333', text: '#fff', accent: '#666' };
+
+function MatchIcon({ match }: { match: boolean }) {
+  return match ? (
+    <Check size={13} style={{ color: 'var(--success)' }} />
+  ) : (
+    <X size={13} style={{ color: 'var(--error)', opacity: 0.5 }} />
+  );
+}
+
+function ScorePill({ pts }: { pts: number }) {
+  return (
+    <span
+      className="text-[10px] font-bold px-1.5 py-0.5 rounded-md tabular-nums"
+      style={{
+        background: pts > 0 ? 'rgba(46, 204, 113, 0.15)' : 'rgba(136, 136, 136, 0.08)',
+        color: pts > 0 ? 'var(--success)' : 'var(--text-muted)',
+      }}
+    >
+      {pts > 0 ? `+${pts}` : '0'}
+    </span>
+  );
+}
+
 interface Props {
   prediction: TournamentPrediction;
   actualResults: ActualResults;
@@ -18,31 +42,12 @@ export default function ScoreBreakdownView({ prediction, actualResults, tourname
 
   const getTeamColor = (name: string) => {
     const team = teamMap.get(name);
-    return team?.color || { bg: '#333', text: '#fff', accent: '#666' };
+    return team?.color || DEFAULT_TEAM_COLOR;
   };
 
   const getTeamShort = (name: string) => {
     return teamMap.get(name)?.shortName || name;
   };
-
-  const MatchIcon = ({ match }: { match: boolean }) =>
-    match ? (
-      <Check size={13} style={{ color: 'var(--success)' }} />
-    ) : (
-      <X size={13} style={{ color: 'var(--error)', opacity: 0.5 }} />
-    );
-
-  const ScorePill = ({ pts }: { pts: number }) => (
-    <span
-      className="text-[10px] font-bold px-1.5 py-0.5 rounded-md tabular-nums"
-      style={{
-        background: pts > 0 ? 'rgba(46, 204, 113, 0.15)' : 'rgba(136, 136, 136, 0.08)',
-        color: pts > 0 ? 'var(--success)' : 'var(--text-muted)',
-      }}
-    >
-      {pts > 0 ? `+${pts}` : '0'}
-    </span>
-  );
 
   // Score summary categories
   const categories = [
