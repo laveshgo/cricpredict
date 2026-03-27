@@ -136,34 +136,40 @@ export function onAuctionStateUpdate(
 
 // Start the auction (admin only — set status to 'live', present first player)
 export async function startAuction(leagueId: string): Promise<void> {
-  const snap = await getDoc(doc(db, 'fantasyAuctions', leagueId));
-  if (!snap.exists()) throw new Error('Auction not found');
+  const auctionRef = doc(db, 'fantasyAuctions', leagueId);
+  const leagueRef = doc(db, 'fantasyLeagues', leagueId);
 
-  const state = snap.data() as AuctionState;
-  if (state.playerOrder.length === 0) throw new Error('No players in auction');
+  await runTransaction(db, async (txn) => {
+    const snap = await txn.get(auctionRef);
+    if (!snap.exists()) throw new Error('Auction not found');
 
-  const firstPlayer = state.playerOrder[0];
-  const timerEndsAt = new Date(Date.now() + state.timerDuration * 1000).toISOString();
+    const state = snap.data() as AuctionState;
+    if (state.status === 'live') return; // already started
+    if (state.playerOrder.length === 0) throw new Error('No players in auction');
 
-  await updateDoc(doc(db, 'fantasyAuctions', leagueId), {
-    status: 'live',
-    currentIndex: 0,
-    currentPlayer: firstPlayer,
-    currentSet: firstPlayer.set,
-    currentBid: firstPlayer.basePrice,
-    currentBidderId: null,
-    currentBidderName: null,
-    bidHistory: [],
-    passedUserIds: [],
-    holdsUsed: {},
-    timerEndsAt,
-    startedAt: new Date().toISOString(),
-  });
+    const firstPlayer = state.playerOrder[0];
+    const timerEndsAt = new Date(Date.now() + state.timerDuration * 1000).toISOString();
 
-  // Also lock the league
-  await updateDoc(doc(db, 'fantasyLeagues', leagueId), {
-    auctionStatus: 'live',
-    'settings.addLocked': true,
+    txn.update(auctionRef, {
+      status: 'live',
+      currentIndex: 0,
+      currentPlayer: firstPlayer,
+      currentSet: firstPlayer.set,
+      currentBid: firstPlayer.basePrice,
+      currentBidderId: null,
+      currentBidderName: null,
+      bidHistory: [],
+      passedUserIds: [],
+      holdsUsed: {},
+      timerEndsAt,
+      startedAt: new Date().toISOString(),
+    });
+
+    // Also lock the league
+    txn.update(leagueRef, {
+      auctionStatus: 'live',
+      'settings.addLocked': true,
+    });
   });
 }
 
@@ -220,8 +226,20 @@ export async function placeBid(
 
 // Pass on current player (user opts out)
 export async function passOnPlayer(leagueId: string, userId: string): Promise<void> {
-  await updateDoc(doc(db, 'fantasyAuctions', leagueId), {
-    passedUserIds: arrayUnion(userId),
+  const auctionRef = doc(db, 'fantasyAuctions', leagueId);
+
+  await runTransaction(db, async (txn) => {
+    const snap = await txn.get(auctionRef);
+    if (!snap.exists()) throw new Error('Auction not found');
+
+    const state = snap.data() as AuctionState;
+    if (state.status !== 'live') throw new Error('Auction not active');
+    if (!state.currentPlayer) throw new Error('No player up for bid');
+    if (state.passedUserIds.includes(userId)) return; // already passed
+
+    txn.update(auctionRef, {
+      passedUserIds: [...state.passedUserIds, userId],
+    });
   });
 }
 
@@ -393,26 +411,44 @@ export async function soldAndNext(leagueId: string): Promise<void> {
 
 // Pause / Resume auction
 export async function pauseAuction(leagueId: string): Promise<void> {
-  await updateDoc(doc(db, 'fantasyAuctions', leagueId), {
-    status: 'paused',
-    timerEndsAt: null,
-  });
-  await updateDoc(doc(db, 'fantasyLeagues', leagueId), {
-    auctionStatus: 'paused',
+  const auctionRef = doc(db, 'fantasyAuctions', leagueId);
+  const leagueRef = doc(db, 'fantasyLeagues', leagueId);
+
+  await runTransaction(db, async (txn) => {
+    const snap = await txn.get(auctionRef);
+    if (!snap.exists()) return;
+
+    const state = snap.data() as AuctionState;
+    if (state.status !== 'live') return; // only pause from live
+
+    txn.update(auctionRef, {
+      status: 'paused',
+      timerEndsAt: null,
+    });
+    txn.update(leagueRef, {
+      auctionStatus: 'paused',
+    });
   });
 }
 
 export async function resumeAuction(leagueId: string): Promise<void> {
-  const snap = await getDoc(doc(db, 'fantasyAuctions', leagueId));
-  if (!snap.exists()) return;
-  const state = snap.data() as AuctionState;
+  const auctionRef = doc(db, 'fantasyAuctions', leagueId);
+  const leagueRef = doc(db, 'fantasyLeagues', leagueId);
 
-  await updateDoc(doc(db, 'fantasyAuctions', leagueId), {
-    status: 'live',
-    timerEndsAt: new Date(Date.now() + state.timerDuration * 1000).toISOString(),
-  });
-  await updateDoc(doc(db, 'fantasyLeagues', leagueId), {
-    auctionStatus: 'live',
+  await runTransaction(db, async (txn) => {
+    const snap = await txn.get(auctionRef);
+    if (!snap.exists()) return;
+
+    const state = snap.data() as AuctionState;
+    if (state.status !== 'paused') return; // only resume from paused
+
+    txn.update(auctionRef, {
+      status: 'live',
+      timerEndsAt: new Date(Date.now() + state.timerDuration * 1000).toISOString(),
+    });
+    txn.update(leagueRef, {
+      auctionStatus: 'live',
+    });
   });
 }
 
