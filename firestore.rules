@@ -1,0 +1,99 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper: check if the caller is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: check if the caller is the document owner
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // Helper: check if the caller is a member of a group
+    function isGroupMember(groupId) {
+      return isAuthenticated() &&
+        request.auth.uid in get(/databases/$(database)/documents/groups/$(groupId)).data.memberUids;
+    }
+
+    // Helper: check if the caller is the group admin
+    function isGroupAdmin(groupId) {
+      return isAuthenticated() &&
+        request.auth.uid == get(/databases/$(database)/documents/groups/$(groupId)).data.createdBy;
+    }
+
+    // Users: only the owner can read/write their own profile
+    match /users/{uid} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(uid);
+      allow delete: if false;
+    }
+
+    // Usernames: public read for availability check, write only via profile creation
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
+    }
+
+    // Emails: lookup index (require auth to prevent unauthenticated enumeration)
+    match /emails/{email} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
+    }
+
+    // Tournaments: public read, only creator can write
+    match /tournaments/{tournamentId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+    }
+
+    // Groups: members can read, group creation and join/leave go through server-side API routes
+    // (Admin SDK bypasses these rules, so client-side memberUids updates are no longer allowed)
+    match /groups/{groupId} {
+      allow read: if isAuthenticated();
+      allow create: if false; // creation happens via /api/groups/create (Admin SDK)
+      // Only group admin can update settings (name, settings, etc.)
+      // join/leave handled server-side via /api/groups/join (Admin SDK)
+      allow update: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+    }
+
+    // Predictions: group members can read, only the owning user can write their own prediction
+    match /predictions/{predictionId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Match predictions: same as predictions
+    match /matchPredictions/{predId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Actual results: per-group, only the group admin can write
+    match /actualResults/{groupId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && isGroupAdmin(groupId);
+      allow delete: if false;
+    }
+
+    // Matches: public read, only tournament creator can write
+    match /matches/{matchId} {
+      allow read: if true;
+      allow create: if isAuthenticated() &&
+        request.auth.uid == get(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)).data.createdBy;
+      allow update: if isAuthenticated() &&
+        request.auth.uid == get(/databases/$(database)/documents/tournaments/$(resource.data.tournamentId)).data.createdBy;
+      allow delete: if false;
+    }
+  }
+}
