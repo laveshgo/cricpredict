@@ -135,8 +135,6 @@ export default function FantasyLeaguePage() {
       setLoading(false);
     }));
 
-    unsubs.push(onAuctionStateUpdate(leagueId, setAuctionState));
-
     return () => unsubs.forEach(u => u());
   }, [tournamentId, leagueId, authLoading, user]);
 
@@ -145,10 +143,19 @@ export default function FantasyLeaguePage() {
   const isAdmin = league?.createdBy === user?.uid;
   const memberCount = league?.memberUids.length || 0;
 
+  // Auction state listener — only subscribe when user is a confirmed member
+  // (fantasyAuctions collection requires league membership in Firestore rules)
+  useEffect(() => {
+    if (!isMember || !user) return;
+    const unsub = onAuctionStateUpdate(leagueId, setAuctionState);
+    return () => unsub();
+  }, [isMember, leagueId, user]);
+
   // If auction is active (live/paused/selection), redirect to auction room
+  // Use replace instead of push so browser back doesn't create a redirect loop
   useEffect(() => {
     if (auctionState && ['live', 'paused', 'selection'].includes(auctionState.status) && isMember) {
-      router.push(`/fantasy/${tournamentId}/auction/${leagueId}`);
+      router.replace(`/fantasy/${tournamentId}/auction/${leagueId}`);
     }
   }, [auctionState, isMember, tournamentId, leagueId, router]);
 
@@ -324,11 +331,12 @@ export default function FantasyLeaguePage() {
       <div className="mx-auto max-w-md px-4 py-8 sm:py-16 text-center animate-fade-in">
         {/* Back button */}
         <div className="flex justify-start mb-6">
-          <Link href={`/tournament/${tournamentId}?tab=fantasy`}>
-            <button className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors">
-              <ArrowLeft size={16} className="text-[var(--text-muted)]" />
-            </button>
-          </Link>
+          <button
+            onClick={() => router.back()}
+            className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
+          >
+            <ArrowLeft size={16} className="text-[var(--text-muted)]" />
+          </button>
         </div>
 
         <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
@@ -512,11 +520,12 @@ export default function FantasyLeaguePage() {
       <div className="mx-auto max-w-4xl px-4 py-6 animate-fade-in">
         {/* Header */}
         <div className="flex items-center gap-3 mb-5">
-          <Link href={`/tournament/${tournamentId}?tab=fantasy`}>
-            <button className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors">
-              <ArrowLeft size={16} className="text-[var(--text-muted)]" />
-            </button>
-          </Link>
+          <button
+            onClick={() => router.back()}
+            className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
+          >
+            <ArrowLeft size={16} className="text-[var(--text-muted)]" />
+          </button>
           <div className="flex-1">
             <h1 className="text-xl font-bold text-[var(--text-primary)]">{league.name}</h1>
             <p className="text-xs text-[var(--text-muted)]">Auction Complete</p>
@@ -611,12 +620,13 @@ export default function FantasyLeaguePage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Link href={`/tournament/${tournamentId}?tab=fantasy`}>
-          <button className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors">
-            <ArrowLeft size={16} className="text-[var(--text-muted)]" />
-          </button>
-        </Link>
+        <div className="flex items-center gap-3 mb-6">
+        <button
+          onClick={() => router.back()}
+          className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
+        >
+          <ArrowLeft size={16} className="text-[var(--text-muted)]" />
+        </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold text-[var(--text-primary)] truncate">{league.name}</h1>
           <p className="text-xs text-[var(--text-muted)]">

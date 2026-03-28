@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import {
   onGroup,
@@ -64,9 +64,10 @@ import {
   Loader2,
   TrendingUp,
   ArrowLeftRight,
+  ArrowLeft,
   Share2,
   MessageCircle,
-  Link,
+  Link as LinkIcon,
   Lock,
 } from 'lucide-react';
 import type { UserProfile } from '@/types';
@@ -75,6 +76,7 @@ type Tab = 'predict' | 'predictions' | 'consensus' | 'leaderboard' | 'live' | 'a
 
 export default function GroupPage() {
   const params = useParams();
+  const router = useRouter();
   const groupId = params.groupId as string;
   const { user, profile, loading: authLoading } = useAuth();
 
@@ -579,7 +581,14 @@ export default function GroupPage() {
         <div className="px-5 pt-6 pb-5">
           {/* Title Row */}
           <div className="flex items-start justify-between flex-wrap gap-3">
-            <div className="flex-1 min-w-0">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <button
+                onClick={() => router.back()}
+                className="shrink-0 mt-1 w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
+              >
+                <ArrowLeft size={16} className="text-[var(--text-muted)]" />
+              </button>
+              <div className="min-w-0">
               <h1 className="text-2xl sm:text-3xl font-black tracking-tight gradient-text">
                 {group.name}
               </h1>
@@ -590,6 +599,7 @@ export default function GroupPage() {
                 <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>
                   {allPredictions.length} prediction{allPredictions.length !== 1 ? 's' : ''}
                 </span>
+              </div>
               </div>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -610,7 +620,7 @@ export default function GroupPage() {
                 size="sm"
                 className="gap-1 text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-ghost)]"
               >
-                {linkCopied ? <Check size={13} /> : <Link size={13} />}
+                {linkCopied ? <Check size={13} /> : <LinkIcon size={13} />}
                 <span className="hidden sm:inline text-xs">{linkCopied ? 'Copied!' : 'Share'}</span>
               </Button>
               <Button

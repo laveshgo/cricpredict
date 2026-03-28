@@ -120,11 +120,12 @@ export default function CreateLeaguePage() {
     <div className="mx-auto max-w-lg px-4 py-8 animate-fade-in">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href={`/tournament/${tournamentId}?tab=fantasy`}>
-          <button className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors">
-            <ArrowLeft size={16} className="text-[var(--text-muted)]" />
-          </button>
-        </Link>
+        <button
+          onClick={() => router.back()}
+          className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
+        >
+          <ArrowLeft size={16} className="text-[var(--text-muted)]" />
+        </button>
         <h1 className="text-xl font-bold text-[var(--text-primary)]">Create Fantasy League</h1>
       </div>
 

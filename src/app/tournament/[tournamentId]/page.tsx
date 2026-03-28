@@ -76,6 +76,17 @@ export default function TournamentPage() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') === 'fantasy' ? 'fantasy' : 'predictions';
   const [contestTab, setContestTab] = useState<ContestType>(initialTab);
+
+  const handleTabChange = (tab: ContestType) => {
+    setContestTab(tab);
+    const url = new URL(window.location.href);
+    if (tab === 'fantasy') {
+      url.searchParams.set('tab', 'fantasy');
+    } else {
+      url.searchParams.delete('tab');
+    }
+    window.history.replaceState({}, '', url.toString());
+  };
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
@@ -314,7 +325,7 @@ export default function TournamentPage() {
         ]).map(({ key, label, icon: Icon, desc }) => (
           <button
             key={key}
-            onClick={() => setContestTab(key)}
+            onClick={() => handleTabChange(key)}
             className={`flex-1 p-4 rounded-xl border-2 transition-all duration-200 text-left ${
               contestTab === key
                 ? 'border-[var(--accent)] bg-[var(--accent)]/10 shadow-lg shadow-[var(--accent)]/10'

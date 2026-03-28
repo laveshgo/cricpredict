@@ -30,6 +30,7 @@ import {
   Zap,
   Users,
   ArrowUp,
+  ArrowLeft,
   XCircle,
   Pause,
   Play,
@@ -478,7 +479,14 @@ export default function AuctionRoomPage() {
     return (
       <div className="mx-auto max-w-lg px-4 py-4 animate-fade-in">
         {/* Header */}
-        <div className="text-center mb-4">
+        <div className="mb-4">
+          <button
+            onClick={() => router.back()}
+            className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors mb-3"
+          >
+            <ArrowLeft size={14} className="text-[var(--text-muted)]" />
+          </button>
+          <div className="text-center">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[var(--accent)] to-blue-500 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-[var(--accent)]/30">
             <ListChecks size={26} className="text-white" />
           </div>
@@ -488,6 +496,7 @@ export default function AuctionRoomPage() {
               ? 'Select unsold players you want re-auctioned'
               : 'Your squad is full — you can still nominate players for others!'}
           </p>
+          </div>
         </div>
 
         {/* Confirmation status */}
@@ -849,8 +858,14 @@ export default function AuctionRoomPage() {
       {/* Header bar */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.back()}
+            className="w-8 h-8 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors shrink-0"
+          >
+            <ArrowLeft size={14} className="text-[var(--text-muted)]" />
+          </button>
           <Gavel size={18} className="text-[var(--accent)]" />
-          <span className="text-sm font-bold text-[var(--text-primary)]">{league.name}</span>
+          <span className="text-sm font-bold text-[var(--text-primary)] truncate">{league.name}</span>
         </div>
         <div className="flex items-center gap-2">
           {auction.status === 'paused' && (
