@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useTournamentCache } from '@/hooks/useTournamentCache';
 import { getTournaments, getUserGroups } from '@/lib/firestore';
 import { getAllUserFantasyLeagues } from '@/lib/fantasy-firestore';
 // seedIPL2026 is dynamically imported below to avoid shipping seed data in production bundle
@@ -137,7 +138,8 @@ function GroupSkeleton() {
 // =================== HOME PAGE ===================
 
 export default function HomePage() {
-  const { user, profile, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const tournamentCache = useTournamentCache();
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [tournamentsLoading, setTournamentsLoading] = useState(true);
   const [myGroups, setMyGroups] = useState<Group[]>([]);
@@ -147,7 +149,10 @@ export default function HomePage() {
   // Fetch tournaments immediately — no auth needed, don't wait for it
   useEffect(() => {
     getTournaments()
-      .then(setTournaments)
+      .then((ts) => {
+        setTournaments(ts);
+        tournamentCache.setAll(ts);
+      })
       .catch((err) => console.error('Failed to load tournaments:', err))
       .finally(() => setTournamentsLoading(false));
   }, []);

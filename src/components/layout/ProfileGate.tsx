@@ -15,7 +15,7 @@ const PUBLIC_PATHS = [
 export default function ProfileGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, profile, needsUsername, loading } = useAuth();
+  const { user, needsUsername, loading } = useAuth();
 
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 

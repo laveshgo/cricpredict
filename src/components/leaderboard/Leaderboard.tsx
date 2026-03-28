@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import type { LeaderboardEntry } from '@/types';
-import { Trophy, User, TrendingUp, Zap, Award, Target, Swords } from 'lucide-react';
+import { Trophy, User } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useTournamentCache } from '@/hooks/useTournamentCache';
 import {
   onTournament,
   getGroupsForTournament,
@@ -28,10 +29,11 @@ import {
   Target,
   Swords,
   Gavel,
+  Plus,
+  LogIn,
 } from 'lucide-react';
 import Link from 'next/link';
 import { joinGroupApi, createGroupApi } from '@/lib/api-client';
-import { Plus, LogIn } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -42,7 +44,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 export default function TournamentPage() {
@@ -50,16 +52,17 @@ export default function TournamentPage() {
   const router = useRouter();
   const tournamentId = params.tournamentId as string;
   const { user, profile, loading: authLoading } = useAuth();
+  const tournamentCache = useTournamentCache();
+  const cached = tournamentCache.get(tournamentId);
 
-  const [tournament, setTournament] = useState<Tournament | null>(null);
+  const [tournament, setTournament] = useState<Tournament | null>(cached ?? null);
   const [publicGroups, setPublicGroups] = useState<Group[]>([]);
   const [myGroups, setMyGroups] = useState<Group[]>([]);
   const [myFantasyLeagues, setMyFantasyLeagues] = useState<FantasyLeague[]>([]);
   const [publicFantasyLeagues, setPublicFantasyLeagues] = useState<FantasyLeague[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!cached);
   const [joiningGroupId, setJoiningGroupId] = useState<string | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
-  const [joiningLeagueId, setJoiningLeagueId] = useState<string | null>(null);
   const [groupModal, setGroupModal] = useState<'create' | 'join' | null>(null);
   const [groupModalName, setGroupModalName] = useState('');
   const [groupModalId, setGroupModalId] = useState('');
@@ -76,15 +79,14 @@ export default function TournamentPage() {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
-  // Only subscribe to Firestore once user is authenticated
   useEffect(() => {
-    if (authLoading || !user) return;
     const unsub = onTournament(tournamentId, (t) => {
       setTournament(t);
+      if (t) tournamentCache.set(t);
       setLoading(false);
     });
     return () => unsub();
-  }, [tournamentId, authLoading, user]);
+  }, [tournamentId]);
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -161,22 +163,6 @@ export default function TournamentPage() {
       setJoinError(err.message || 'Failed to join group');
     } finally {
       setJoiningGroupId(null);
-    }
-  };
-
-  const handleJoinFantasyLeague = async (leagueId: string) => {
-    if (!user || !profile) return;
-    setJoiningLeagueId(leagueId);
-    try {
-      await joinFantasyLeague(leagueId, user.uid, {
-        displayName: profile.displayName || profile.username || 'User',
-        username: profile.username || 'user',
-      });
-      router.push(`/fantasy/${tournamentId}/league/${leagueId}`);
-    } catch (err: any) {
-      console.error('Failed to join fantasy league:', err);
-    } finally {
-      setJoiningLeagueId(null);
     }
   };
 

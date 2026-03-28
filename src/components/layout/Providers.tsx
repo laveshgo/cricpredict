@@ -2,12 +2,15 @@
 
 import { AuthProvider } from '@/hooks/useAuth';
 import { ThemeProvider } from '@/hooks/useTheme';
+import { TournamentCacheProvider } from '@/hooks/useTournamentCache';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider>
       <AuthProvider>
-        {children}
+        <TournamentCacheProvider>
+          {children}
+        </TournamentCacheProvider>
       </AuthProvider>
     </ThemeProvider>
   );

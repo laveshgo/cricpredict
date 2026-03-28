@@ -32,7 +32,7 @@ const AllPicksTab = dynamic(() => import('@/components/group/AllPicksTab'));
 const ShareCard = dynamic(() => import('@/components/prediction/ShareCard'));
 import { joinGroupApi } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -76,7 +76,7 @@ type Tab = 'predict' | 'predictions' | 'consensus' | 'leaderboard' | 'live' | 'a
 export default function GroupPage() {
   const params = useParams();
   const groupId = params.groupId as string;
-  const { user, profile, loading: authLoading, reloadProfile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
 
   const [group, setGroup] = useState<Group | null>(null);
   const [tournament, setTournament] = useState<Tournament | null>(null);
@@ -105,7 +105,6 @@ export default function GroupPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [shareCardPrediction, setShareCardPrediction] = useState<TournamentPrediction | null>(null);
 
-  // Load group — only after auth is ready
   useEffect(() => {
     if (authLoading || !user) return;
     const unsub = onGroup(groupId, (g) => setGroup(g));
@@ -122,7 +121,7 @@ export default function GroupPage() {
         getPrediction(groupId, group.tournamentId, user.uid),
         getMatches(group.tournamentId),
         getAllMatchPredictionsForGroup(groupId),
-        getGroupMembers(groupId),
+        getGroupMembers(group.memberUids || []),
       ]);
       setTournament(t);
       setMyPrediction(pred);

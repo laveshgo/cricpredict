@@ -5,7 +5,6 @@ import {
   getDocs,
   setDoc,
   updateDoc,
-  deleteDoc,
   query,
   where,
   orderBy,
@@ -112,26 +111,31 @@ export async function leaveGroup(groupId: string, userId: string) {
   });
 }
 
-/** Get all members of a group by batch-fetching from the group's memberUids */
-export async function getGroupMembers(groupId: string): Promise<Pick<UserProfile, 'uid' | 'username' | 'firstName' | 'lastName' | 'displayName' | 'photoURL'>[]> {
-  const groupSnap = await getDoc(doc(db, 'groups', groupId));
-  if (!groupSnap.exists()) return [];
+/** Batch-fetch member profiles. Pass memberUids directly to skip the group doc read. */
+export async function getGroupMembers(groupIdOrUids: string | string[]): Promise<Pick<UserProfile, 'uid' | 'username' | 'firstName' | 'lastName' | 'displayName' | 'photoURL'>[]> {
+  let memberUids: string[];
 
-  const groupData = groupSnap.data();
-  const memberUids: string[] = groupData.memberUids || [];
+  if (Array.isArray(groupIdOrUids)) {
+    memberUids = groupIdOrUids;
+  } else {
+    const groupSnap = await getDoc(doc(db, 'groups', groupIdOrUids));
+    if (!groupSnap.exists()) return [];
+    memberUids = groupSnap.data().memberUids || [];
+  }
+
   if (memberUids.length === 0) return [];
 
-  // Batch fetch user profiles (Firestore 'in' supports up to 30 items per query)
-  const members: Pick<UserProfile, 'uid' | 'username' | 'firstName' | 'lastName' | 'displayName' | 'photoURL'>[] = [];
-  const chunks = [];
+  const chunks: string[][] = [];
   for (let i = 0; i < memberUids.length; i += 30) {
     chunks.push(memberUids.slice(i, i + 30));
   }
 
-  for (const chunk of chunks) {
-    const snap = await getDocs(
-      query(collection(db, 'users'), where('uid', 'in', chunk))
-    );
+  const snapshots = await Promise.all(
+    chunks.map(chunk => getDocs(query(collection(db, 'users'), where('uid', 'in', chunk))))
+  );
+
+  const members: Pick<UserProfile, 'uid' | 'username' | 'firstName' | 'lastName' | 'displayName' | 'photoURL'>[] = [];
+  for (const snap of snapshots) {
     snap.docs.forEach((d) => {
       const data = d.data();
       members.push({

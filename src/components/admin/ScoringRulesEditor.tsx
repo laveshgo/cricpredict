@@ -5,7 +5,7 @@ import type { ScoringConfig } from '@/types';
 import { DEFAULT_SCORING } from '@/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, Save, Trophy, Target, Zap, Award, Swords, Calculator } from 'lucide-react';
+import { RotateCcw, Save, Trophy, Target, Zap, Award, Calculator } from 'lucide-react';
 
 type LucideIcon = typeof Trophy;
 

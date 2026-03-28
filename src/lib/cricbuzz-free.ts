@@ -146,8 +146,6 @@ function extractPointsTable(html: string): PointsTableResponse | null {
     return null;
   }
 
-  console.log(`[cricbuzz-free] RSC payload total length: ${payload.length}`);
-
   // Look for pointsTableData which contains the full points table
   const data = extractJSONFromPayload(payload, 'pointsTableData');
   if (data?.pointsTableData) {
@@ -201,7 +199,6 @@ async function fetchStatsFromApi(
   statsType: 'mostRuns' | 'mostWickets'
 ): Promise<StatsResponse | null> {
   const url = `https://www.cricbuzz.com/api/cricket-series/series-stats/${seriesId}/${statsType}`;
-  console.log(`[cricbuzz-free] Trying internal stats API: ${url}`);
 
   try {
     const controller = new AbortController();
@@ -307,7 +304,6 @@ async function fetchPage(
       }
 
       const html = await res.text();
-      console.log(`[cricbuzz-free] ${label} → HTTP ${res.status} | size=${html.length}`);
 
       if (html.length < 1000) {
         console.warn(`[cricbuzz-free] ${label} → response too small`);
@@ -339,8 +335,6 @@ export async function fetchCricbuzzFree(
   type: CricbuzzDataType,
   seriesId: string
 ): Promise<object | null> {
-  console.log(`[cricbuzz-free] Attempting free fetch: type=${type}, seriesId=${seriesId}`);
-
   try {
     if (type === 'points-table') {
       const page = await fetchPage(getPointsTableUrls(seriesId));
@@ -366,7 +360,6 @@ export async function fetchCricbuzzFree(
 
       // Fallback: RSC page scraping (only works for mostRuns)
       if (type === 'most-runs') {
-        console.log(`[cricbuzz-free] Falling back to RSC page scraping for most-runs`);
         const page = await fetchPage(getStatsPageUrls(seriesId));
         if (page) {
           const pageResult = extractStatsFromPage(page.html);

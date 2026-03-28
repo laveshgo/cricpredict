@@ -26,7 +26,7 @@ import type {
   ScoringConfig,
   UserProfile,
 } from '@/types';
-import { saveActualResults, updateGroupSettings, updateTournamentScoring, getTournament, leaveGroup } from '@/lib/firestore';
+import { saveActualResults, updateGroupSettings, updateTournamentScoring, getTournament } from '@/lib/firestore';
 import dynamic from 'next/dynamic';
 
 const ScoringRulesEditor = dynamic(() => import('@/components/admin/ScoringRulesEditor'));

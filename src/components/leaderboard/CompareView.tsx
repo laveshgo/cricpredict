@@ -2,7 +2,6 @@
 
 import { useMemo } from 'react';
 import type { TournamentPrediction, ActualResults, Tournament, ScoreBreakdown } from '@/types';
-import { Fragment } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Check } from 'lucide-react';
 

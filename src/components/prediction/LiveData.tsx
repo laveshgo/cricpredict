@@ -5,7 +5,7 @@ import type { Tournament, ActualResults } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RefreshCw, Trophy, Target, Zap, Award, TrendingUp, Star, ChevronUp, ChevronDown, Minus } from 'lucide-react';
+import { RefreshCw, Trophy, Target, Zap, Award, TrendingUp, Star } from 'lucide-react';
 
 const DEFAULT_TEAM_COLOR = { bg: '#333', text: '#fff', accent: '#666' };
 

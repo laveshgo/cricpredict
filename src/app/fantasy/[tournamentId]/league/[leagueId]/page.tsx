@@ -37,13 +37,11 @@ import {
   ChevronUp,
   ListOrdered,
   Trophy,
-  Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 
 // ─── Role label map ───
 const ROLE_LABELS: Record<string, string> = {
