@@ -283,6 +283,7 @@ export default function GroupPage() {
     teamRanking: string[];
     runs: string[];
     wickets: string[];
+    mvp: string;
     noData: boolean;
     teamQualifyStatus: Record<string, 'Q' | 'E'>;
   }
@@ -292,16 +293,23 @@ export default function GroupPage() {
     const sid = tournament.cricbuzzSeriesId;
     const token = await user.getIdToken();
 
-    const [ptRes, runsRes, wktsRes] = await Promise.all([
+    const [ptRes, runsRes, wktsRes, mvpRes] = await Promise.all([
       fetch(`/api/cricbuzz?type=points-table&seriesId=${sid}`, { headers: { Authorization: `Bearer ${token}` } }),
       fetch(`/api/cricbuzz?type=most-runs&seriesId=${sid}`, { headers: { Authorization: `Bearer ${token}` } }),
       fetch(`/api/cricbuzz?type=most-wickets&seriesId=${sid}`, { headers: { Authorization: `Bearer ${token}` } }),
+      tournament.season
+        ? fetch(`/api/ipl-mvp?season=${tournament.season}`, { headers: { Authorization: `Bearer ${token}` } })
+        : Promise.resolve(null),
     ]);
 
     const [ptData, runsData, wktsData] = await Promise.all([ptRes.json(), runsRes.json(), wktsRes.json()]);
+    let mvpData: any = null;
+    try {
+      if (mvpRes && mvpRes.ok) mvpData = await mvpRes.json();
+    } catch { /* MVP fetch is best-effort */ }
 
     if (ptData?.noData && runsData?.noData && wktsData?.noData) {
-      return { teamRanking: [], runs: [], wickets: [], noData: true, teamQualifyStatus: {} };
+      return { teamRanking: [], runs: [], wickets: [], mvp: '', noData: true, teamQualifyStatus: {} };
     }
 
     let teamRanking: string[] = [];
@@ -334,7 +342,9 @@ export default function GroupPage() {
       }
     }
 
-    return { teamRanking, runs, wickets, noData: false, teamQualifyStatus };
+    const mvp = mvpData?.mvpName || '';
+
+    return { teamRanking, runs, wickets, mvp, noData: false, teamQualifyStatus };
   }, [tournament, user]);
 
   // Live tab: fetch, then auto-save to Firestore if admin
@@ -361,7 +371,7 @@ export default function GroupPage() {
           runnerUp: existing?.runnerUp || '',
           runs: data.runs.length > 0 ? data.runs.filter(Boolean) : (existing?.runs || []),
           wickets: data.wickets.length > 0 ? data.wickets.filter(Boolean) : (existing?.wickets || []),
-          mvp: existing?.mvp || '',
+          mvp: data.mvp || existing?.mvp || '',
           lastUpdated: new Date().toISOString(),
           ...(Object.keys(data.teamQualifyStatus).length > 0
             ? { teamQualifyStatus: data.teamQualifyStatus }

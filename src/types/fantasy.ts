@@ -42,64 +42,115 @@ export const DEFAULT_ROLE_CONSTRAINTS: RoleConstraints = {
 
 // ─── Fantasy scoring rules ───
 export interface FantasyScoringRules {
-  // Batting
-  runPoints: number;
-  boundaryBonus: number;
-  sixBonus: number;
-  thirtyBonus: number;
-  halfCenturyBonus: number;
-  centuryBonus: number;
-  duckPenalty: number;
-  strikeRateBonus: { threshold: number; bonus: number };
-  strikeRatePenalty: { threshold: number; penalty: number };
+  // Playing XI
+  playingXIPoints: number;              // +4 for being named in Starting XI
+
+  // Batting - Base
+  runPoints: number;                    // +1 per run
+  fourBonus: number;                    // +4 boundary bonus
+  sixBonus: number;                     // +6 six bonus
+  duckPenalty: number;                  // -2 (only if batter is dismissed for 0)
+
+  // Batting Milestones (highest only)
+  milestone25: number;                  // +4
+  milestone50: number;                  // +8
+  milestone75: number;                  // +12
+  milestone100: number;                 // +16
+
+  // Strike Rate Bonus/Penalty (min 10 balls faced OR 20 runs)
+  srAbove190: number;                   // +8
+  sr170to190: number;                   // +6
+  sr150to170: number;                   // +4
+  sr130to150: number;                   // +2
+  sr70to100: number;                    // -2
+  sr60to70: number;                     // -4
+  sr50to60: number;                     // -6
 
   // Bowling
-  wicketPoints: number;
-  threeWicketBonus: number;
-  fiveWicketBonus: number;
-  maidenPoints: number;
-  economyBonus: { threshold: number; bonus: number };
-  economyPenalty: { threshold: number; penalty: number };
+  dotBallPoints: number;                // +2 per dot ball
+  wicketPoints: number;                 // +30 per wicket (excluding run outs)
+  lbwBowledBonus: number;               // +8 for LBW/bowled dismissal
+  maidenPoints: number;                 // +12 per maiden over
+
+  // Bowling Milestones (highest only)
+  wickets3Bonus: number;                // +8
+  wickets4Bonus: number;                // +12
+  wickets5Bonus: number;                // +16
+
+  // Economy Rate Bonus/Penalty (min 2 overs bowled)
+  econBelow5: number;                   // +8
+  econ5to6: number;                     // +6
+  econ6to7: number;                     // +4
+  econ7to8: number;                     // +2
+  econ10to11: number;                   // -2
+  econ11to12: number;                   // -4
+  econAbove12: number;                  // -6
 
   // Fielding
-  catchPoints: number;
-  stumpingPoints: number;
-  runOutPoints: number;
-
-  // Match awards
-  potmPoints: number;
+  catchPoints: number;                  // +8
+  threeCatchBonus: number;              // +4 (once per match if 3+ catches)
+  runOutPoints: number;                 // +10
+  stumpingPoints: number;               // +12
 
   // Captain / Vice-Captain
   captainMultiplier: number;
   vcMultiplier: number;
-
-  // Penalties
-  dncPenalty: number;
 }
 
 export const DEFAULT_FANTASY_SCORING: FantasyScoringRules = {
+  // Playing XI
+  playingXIPoints: 4,
+
+  // Batting - Base
   runPoints: 1,
-  boundaryBonus: 1,
-  sixBonus: 2,
-  thirtyBonus: 4,
-  halfCenturyBonus: 8,
-  centuryBonus: 16,
+  fourBonus: 4,
+  sixBonus: 6,
   duckPenalty: -2,
-  strikeRateBonus: { threshold: 170, bonus: 6 },
-  strikeRatePenalty: { threshold: 70, penalty: -6 },
-  wicketPoints: 25,
-  threeWicketBonus: 4,
-  fiveWicketBonus: 8,
+
+  // Batting Milestones (highest only)
+  milestone25: 4,
+  milestone50: 8,
+  milestone75: 12,
+  milestone100: 16,
+
+  // Strike Rate (min 10 balls OR 20 runs)
+  srAbove190: 8,
+  sr170to190: 6,
+  sr150to170: 4,
+  sr130to150: 2,
+  sr70to100: -2,
+  sr60to70: -4,
+  sr50to60: -6,
+
+  // Bowling
+  dotBallPoints: 2,
+  wicketPoints: 30,
+  lbwBowledBonus: 8,
   maidenPoints: 12,
-  economyBonus: { threshold: 5, bonus: 6 },
-  economyPenalty: { threshold: 10, penalty: -6 },
+
+  // Bowling Milestones (highest only)
+  wickets3Bonus: 8,
+  wickets4Bonus: 12,
+  wickets5Bonus: 16,
+
+  // Economy Rate (min 2 overs)
+  econBelow5: 8,
+  econ5to6: 6,
+  econ6to7: 4,
+  econ7to8: 2,
+  econ10to11: -2,
+  econ11to12: -4,
+  econAbove12: -6,
+
+  // Fielding
   catchPoints: 8,
+  threeCatchBonus: 4,
+  runOutPoints: 10,
   stumpingPoints: 12,
-  runOutPoints: 6,
-  potmPoints: 16,
+
+  // Captain / VC
   captainMultiplier: 2,
   vcMultiplier: 1.5,
-  dncPenalty: 0,
 };
 
 // ─── Auction audit log entry (admin actions visible to all) ───
@@ -371,6 +422,8 @@ export interface PlayerMatchStats {
   maidens?: number;
   dotBalls?: number;
   didBowl?: boolean;
+  lbwWickets?: number;                 // wickets via LBW dismissal
+  bowledWickets?: number;              // wickets via bowled dismissal
 
   catches?: number;
   stumpings?: number;
@@ -428,6 +481,228 @@ export interface FantasyLeaderboardEntry {
   totalPoints: number;
   rank: number;
   previousRank?: number;
+}
+
+// =================== GLOBAL FLAT COLLECTIONS ===================
+//
+// Architecture (scalable across years/tournaments):
+//   players/{id}              — global player registry
+//   matches/{id}              — match fixtures/results (ref tournamentId)
+//   matchScorecards/{id}      — full raw cricket scorecards (single source of truth)
+//
+// Per-player stats are precomputed into tournamentStats/{tournamentId} (materialized view)
+// which is rebuilt server-side whenever admin refreshes matches.
+// Fantasy points are calculated client-side from tournamentStats + league scoring rules.
+// matchScorecards is the source of truth; tournamentStats is the derived cache.
+
+export type MatchStatus = 'upcoming' | 'live' | 'completed' | 'no_result' | 'abandoned';
+
+// ─── Global player registry ───
+// players/{id} — one record per player, shared across all tournaments
+export interface CricketPlayer {
+  id: string;                      // stable ID: "virat-kohli" or cricbuzz player ID
+  name: string;                    // "Virat Kohli"
+  shortName?: string;              // "V Kohli" (as seen on scorecards)
+  team: string;                    // current team full name
+  teamShort: string;               // "RCB"
+  role: PlayerRole;                // WK | BAT | AR | BOWL
+  isForeign: boolean;
+  imageUrl?: string;
+  cricbuzzId?: number;             // cricbuzz player ID for linking
+
+  // Denormalized for quick lookups
+  tournaments: string[];           // tournamentIds this player is part of
+}
+
+// ─── Global match collection ───
+// matches/{id} — one record per match, references a tournament
+export interface CricketMatch {
+  id: string;                      // cricbuzz matchId as string
+  cricbuzzMatchId: number;
+  tournamentId: string;            // which tournament this match belongs to
+  matchDesc: string;               // "1st Match", "Qualifier 1", etc.
+  matchNumber?: number;            // numeric match number in the tournament
+  status: MatchStatus;
+  statusText: string;              // "RCB Won by 5 Wkts"
+
+  team1: { name: string; shortName: string; score?: string };
+  team2: { name: string; shortName: string; score?: string };
+  startDate: string;
+  venue?: string;
+
+  potm?: string;                   // Player of the match name
+  innings?: Array<{
+    team: string;
+    teamShort: string;
+    score: string;
+    overs?: string;
+  }>;
+
+  // Metadata
+  scorecardFetched: boolean;       // whether matchScorecards doc has been written
+  fetchedAt?: string;
+}
+
+// ─── Per-player per-match stats (derived shape) ───
+// NOT stored in Firestore — derived on-demand from matchScorecards.
+// This type is the interface between the scorecard flattener and the fantasy calculator.
+export interface PlayerMatchStatsDoc {
+  id: string;                      // "{matchId}_{playerId}"
+  playerId: string;                // references CricketPlayer.id
+  playerName: string;              // denormalized for quick display
+  matchId: string;                 // references CricketMatch.id
+  tournamentId: string;            // for querying all stats in a tournament
+  team: string;                    // team short name
+
+  // Batting
+  runs?: number;
+  ballsFaced?: number;
+  fours?: number;
+  sixes?: number;
+  isOut?: boolean;
+  didBat?: boolean;
+
+  // Bowling
+  wickets?: number;
+  oversBowled?: number;
+  runsConceded?: number;
+  maidens?: number;
+  dotBalls?: number;
+  didBowl?: boolean;
+  lbwWickets?: number;                 // wickets via LBW dismissal
+  bowledWickets?: number;              // wickets via bowled dismissal
+
+  // Fielding
+  catches?: number;
+  stumpings?: number;
+  runOuts?: number;
+
+  // Awards
+  isPotm?: boolean;
+  inPlayingXI?: boolean;
+}
+
+// ─── Full match scorecard (stored in matchScorecards/{matchId}) ───
+// This is the raw cricket scorecard — batting order, dismissals, bowling figures, etc.
+// Single source of truth for all match stats. Per-player aggregates are derived from this.
+
+export interface ScorecardBatterEntry {
+  name: string;                    // "Virat Kohli"
+  playerId?: string;               // stable ID if resolved
+  battingPosition: number;         // 1-based order they came in
+  runs: number;
+  balls: number;
+  fours: number;
+  sixes: number;
+  strikeRate: number;
+  isOut: boolean;
+  dismissal?: string;              // "c Pant b Bumrah", "run out (Jadeja)", "not out", "did not bat"
+  wicketCode?: string;             // "lbw", "bowled", "caught", etc. from Cricbuzz
+  impactSub?: 'in' | 'out';       // IPL impact player: "in" = subbed in, "out" = subbed out
+  // Granular shot breakdown
+  dots?: number;
+  singles?: number;
+  doubles?: number;
+  triples?: number;
+}
+
+export interface ScorecardBowlerEntry {
+  name: string;
+  playerId?: string;
+  overs: number;
+  maidens: number;
+  runsConceded: number;
+  wickets: number;
+  economy: number;
+  dotBalls?: number;
+  noBalls?: number;
+  wides?: number;
+  impactSub?: 'in' | 'out';       // IPL impact player
+}
+
+export interface ScorecardFieldingEntry {
+  name: string;
+  playerId?: string;
+  catches: number;
+  stumpings: number;
+  runOuts: number;
+}
+
+export interface ScorecardExtras {
+  total: number;
+  byes?: number;
+  legByes?: number;
+  wides?: number;
+  noBalls?: number;
+  penalty?: number;
+}
+
+export interface ScorecardFOW {
+  wicketNumber: number;            // 1, 2, 3...
+  runs: number;                    // team score at fall
+  overs?: string;                  // "6.3"
+  batterName?: string;             // who got out
+}
+
+export interface ScorecardInnings {
+  team: string;                    // "Royal Challengers Bengaluru"
+  teamShort: string;               // "RCB"
+  score: string;                   // "185/5 (20)"
+  overs?: string;                  // "20"
+  batters: ScorecardBatterEntry[];
+  bowlers: ScorecardBowlerEntry[];
+  fielders: ScorecardFieldingEntry[];
+  extras?: ScorecardExtras;
+  fallOfWickets?: ScorecardFOW[];
+}
+
+export interface MatchScorecardDoc {
+  id: string;                      // same as matchId
+  matchId: string;
+  tournamentId: string;
+  matchDesc: string;
+  statusText: string;
+  team1: string;
+  team2: string;
+  potm?: string;
+  innings: ScorecardInnings[];
+  fetchedAt: string;
+}
+
+// ─── Legacy TournamentMatch (kept for backward compat during migration) ───
+export interface TournamentMatch {
+  id: string;
+  cricbuzzMatchId: number;
+  matchDesc: string;
+  status: MatchStatus;
+  statusText: string;
+  team1: { name: string; shortName: string; score?: string };
+  team2: { name: string; shortName: string; score?: string };
+  startDate: string;
+  weekNumber?: number;
+  playerStats?: PlayerMatchStats[];
+  potm?: string;
+  innings?: Array<{
+    team: string;
+    teamShort: string;
+    score: string;
+    batterCount: number;
+    bowlerCount: number;
+  }>;
+  fetchedAt?: string;
+  scorecardAvailable?: boolean;
+}
+
+// ─── Materialized view: precomputed per-player stats ───
+// tournamentStats/{tournamentId} — ONE doc per tournament, rebuilt on refresh.
+// Source of truth is matchScorecards. This is the derived cache.
+// Clients read this single doc instead of loading all scorecards.
+export interface TournamentStatsDoc {
+  id: string;                        // same as tournamentId
+  tournamentId: string;
+  stats: PlayerMatchStatsDoc[];      // flattened per-player per-match stats
+  matchCount: number;                // how many scorecards were processed
+  rebuiltAt: string;                 // ISO timestamp of last rebuild
 }
 
 // ─── Contest type enum (for tournament page) ───

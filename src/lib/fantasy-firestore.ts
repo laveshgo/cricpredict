@@ -29,6 +29,7 @@ import type {
   AuctionStatus,
   AuctionRules,
   AuctionLogEntry,
+  MatchScorecardDoc,
 } from '@/types/fantasy';
 
 // =================== FANTASY LEAGUES ===================
@@ -928,4 +929,116 @@ export function onLeagueSquadsUpdate(
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map(d => d.data() as FantasySquad));
   });
+}
+
+// =================== LEGACY TOURNAMENT MATCH DATA (subcollection — kept for compat) ===================
+
+import type { TournamentMatch, CricketMatch, CricketPlayer, PlayerMatchStatsDoc } from '@/types/fantasy';
+
+/** @deprecated Use getMatchesForTournament instead */
+export async function getTournamentMatches(tournamentId: string): Promise<TournamentMatch[]> {
+  const q = query(collection(db, 'tournaments', tournamentId, 'matches'));
+  const snap = await getDocs(q);
+  return snap.docs.map(d => d.data() as TournamentMatch);
+}
+
+/** @deprecated Use getMatch instead */
+export async function getTournamentMatch(
+  tournamentId: string,
+  matchId: string
+): Promise<TournamentMatch | null> {
+  const snap = await getDoc(doc(db, 'tournaments', tournamentId, 'matches', matchId));
+  return snap.exists() ? (snap.data() as TournamentMatch) : null;
+}
+
+/** @deprecated Use onMatchesForTournament instead */
+export function onTournamentMatches(
+  tournamentId: string,
+  callback: (matches: TournamentMatch[]) => void
+): () => void {
+  const q = query(collection(db, 'tournaments', tournamentId, 'matches'));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map(d => d.data() as TournamentMatch));
+  });
+}
+
+// =================== NEW FLAT COLLECTIONS ===================
+//
+// players/{id}              — global player registry
+// matches/{id}              — match fixtures/results
+// playerMatchStats/{id}     — per-player per-match stats
+//
+
+// ─── Players ───
+
+/** Get a player by ID. */
+export async function getPlayer(playerId: string): Promise<CricketPlayer | null> {
+  const snap = await getDoc(doc(db, 'players', playerId));
+  return snap.exists() ? (snap.data() as CricketPlayer) : null;
+}
+
+/** Get all players for a tournament. */
+export async function getPlayersForTournament(tournamentId: string): Promise<CricketPlayer[]> {
+  const q = query(
+    collection(db, 'players'),
+    where('tournaments', 'array-contains', tournamentId)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => d.data() as CricketPlayer);
+}
+
+/** Real-time listener for players in a tournament. */
+export function onPlayersForTournament(
+  tournamentId: string,
+  callback: (players: CricketPlayer[]) => void
+): () => void {
+  const q = query(
+    collection(db, 'players'),
+    where('tournaments', 'array-contains', tournamentId)
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map(d => d.data() as CricketPlayer));
+  });
+}
+
+// ─── Matches ───
+
+/** Get all matches for a tournament (flat collection). */
+export async function getMatchesForTournament(tournamentId: string): Promise<CricketMatch[]> {
+  const q = query(
+    collection(db, 'matches'),
+    where('tournamentId', '==', tournamentId)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => d.data() as CricketMatch);
+}
+
+/** Get a single match. */
+export async function getMatch(matchId: string): Promise<CricketMatch | null> {
+  const snap = await getDoc(doc(db, 'matches', matchId));
+  return snap.exists() ? (snap.data() as CricketMatch) : null;
+}
+
+/** Real-time listener for all matches in a tournament. */
+export function onMatchesForTournament(
+  tournamentId: string,
+  callback: (matches: CricketMatch[]) => void
+): () => void {
+  const q = query(
+    collection(db, 'matches'),
+    where('tournamentId', '==', tournamentId)
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map(d => d.data() as CricketMatch));
+  });
+}
+
+// =================== MATCH SCORECARDS ===================
+// playerMatchStats have been removed — per-player stats are precomputed into
+// tournamentStats/{tournamentId} (materialized view, rebuilt on refresh from matchScorecards).
+
+/** Get the full raw scorecard for a match (batting order, dismissals, bowling figures, etc.) */
+export async function getMatchScorecard(matchId: string): Promise<MatchScorecardDoc | null> {
+  const snap = await getDoc(doc(db, 'matchScorecards', matchId));
+  return snap.exists() ? (snap.data() as MatchScorecardDoc) : null;
 }

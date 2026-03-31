@@ -50,6 +50,15 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isAuthenticated();
       allow update, delete: if isAuthenticated() && resource.data.createdBy == request.auth.uid;
+
+      // Tournament matches subcollection: any authenticated user can read,
+      // only the tournament creator can write (writes happen via Admin SDK anyway)
+      match /matches/{matchId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() &&
+          request.auth.uid == get(/databases/$(database)/documents/tournaments/$(tournamentId)).data.createdBy;
+        allow delete: if false;
+      }
     }
 
     // Groups: members can read, group creation and join/leave go through server-side API routes
@@ -137,13 +146,34 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Matches: public read, only tournament creator can write
+    // =================== GLOBAL FLAT COLLECTIONS ===================
+
+    // Matches: any authenticated user can read, writes via Admin SDK
     match /matches/{matchId} {
-      allow read: if true;
-      allow create: if isAuthenticated() &&
-        request.auth.uid == get(/databases/$(database)/documents/tournaments/$(request.resource.data.tournamentId)).data.createdBy;
-      allow update: if isAuthenticated() &&
-        request.auth.uid == get(/databases/$(database)/documents/tournaments/$(resource.data.tournamentId)).data.createdBy;
+      allow read: if isAuthenticated();
+      allow create, update: if false; // Admin SDK only
+      allow delete: if false;
+    }
+
+    // Players: any authenticated user can read, writes via Admin SDK
+    match /players/{playerId} {
+      allow read: if isAuthenticated();
+      allow create, update: if false; // Admin SDK only
+      allow delete: if false;
+    }
+
+    // Match Scorecards: full raw cricket scorecards, any authenticated user can read
+    match /matchScorecards/{matchId} {
+      allow read: if isAuthenticated();
+      allow create, update: if false; // Admin SDK only
+      allow delete: if false;
+    }
+
+    // Tournament Stats: precomputed materialized view of per-player stats
+    // Rebuilt server-side on refresh from matchScorecards (single source of truth)
+    match /tournamentStats/{tournamentId} {
+      allow read: if isAuthenticated();
+      allow create, update: if false; // Admin SDK only
       allow delete: if false;
     }
   }

@@ -46,6 +46,9 @@ import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import TournamentRefresh from '@/components/fantasy/TournamentRefresh';
+import TournamentFixtures from '@/components/fantasy/TournamentFixtures';
+import TournamentPlayerTable from '@/components/fantasy/TournamentPlayerTable';
 
 export default function TournamentPage() {
   const params = useParams();
@@ -76,6 +79,7 @@ export default function TournamentPage() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') === 'fantasy' ? 'fantasy' : 'predictions';
   const [contestTab, setContestTab] = useState<ContestType>(initialTab);
+  const [fantasySubTab, setFantasySubTab] = useState<'leagues' | 'fixtures' | 'players'>('leagues');
 
   const handleTabChange = (tab: ContestType) => {
     setContestTab(tab);
@@ -512,6 +516,57 @@ export default function TournamentPage() {
       {/* ─── FANTASY DRAFT TAB ─── */}
       {contestTab === 'fantasy' && (
         <>
+          {/* Tournament Admin: Refresh Match Data */}
+          {tournament && user && tournament.createdBy === user.uid && (
+            <div className="mb-6">
+              <TournamentRefresh
+                tournamentId={tournamentId}
+                tournamentName={tournament.name}
+                isCreator={true}
+                isLight={isLight}
+              />
+            </div>
+          )}
+
+          {/* Fantasy sub-tabs */}
+          <div className="flex gap-1 mb-6 p-1 rounded-xl bg-[var(--bg-elevated)] border border-[var(--border)]">
+            {([
+              { key: 'leagues' as const, label: 'Leagues', icon: Swords },
+              { key: 'fixtures' as const, label: 'Fixtures', icon: Calendar },
+              { key: 'players' as const, label: 'Player Stats', icon: Trophy },
+            ]).map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setFantasySubTab(key)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
+                  fantasySubTab === key
+                    ? 'bg-[var(--accent)] text-white shadow-sm'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                <Icon size={14} />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Fixtures tab */}
+          {fantasySubTab === 'fixtures' && (
+            <div className="mb-8">
+              <TournamentFixtures tournamentId={tournamentId} isLight={isLight} />
+            </div>
+          )}
+
+          {/* Player Stats tab */}
+          {fantasySubTab === 'players' && (
+            <div className="mb-8">
+              <TournamentPlayerTable tournamentId={tournamentId} isLight={isLight} />
+            </div>
+          )}
+
+          {/* Leagues tab */}
+          {fantasySubTab === 'leagues' && <>
+
           {/* My Fantasy Leagues */}
           {myFantasyLeagues.length > 0 && (
             <div className="mb-8">
@@ -656,6 +711,7 @@ export default function TournamentPage() {
               </Button>
             </div>
           </div>
+          </>}
         </>
       )}
       {/* Create / Join Group Modal */}

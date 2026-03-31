@@ -47,6 +47,7 @@ interface AdminTabProps {
     teamRanking: string[];
     runs: string[];
     wickets: string[];
+    mvp: string;
     noData: boolean;
     teamQualifyStatus: Record<string, 'Q' | 'E'>;
   } | null>;
@@ -137,6 +138,7 @@ function AdminTabComponent({
       if (data.teamRanking.length > 0) setAdminRanking(data.teamRanking);
       if (data.runs.length > 0) setAdminRuns(data.runs);
       if (data.wickets.length > 0) setAdminWickets(data.wickets);
+      if (data.mvp) setAdminMvp(data.mvp);
       setSaveMsg('Cricbuzz data fetched! Review and save.');
       setTimeout(() => setSaveMsg(''), 3000);
     } catch (err: any) {

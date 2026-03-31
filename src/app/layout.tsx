@@ -4,6 +4,7 @@ import './globals.css';
 import Providers from '@/components/layout/Providers';
 import Navbar from '@/components/layout/Navbar';
 import ProfileGate from '@/components/layout/ProfileGate';
+import ServiceWorkerRegister from '@/components/layout/ServiceWorkerRegister';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -16,11 +17,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'CricPredict - Cricket Prediction Contest',
+  title: 'CricPredict - Fantasy Cricket',
   description:
-    'Create and join cricket prediction contests with friends. Predict team rankings, top players, match winners, and compete on leaderboards.',
+    'Create and join fantasy cricket contests with friends. Predict team rankings, top players, match winners, and compete on leaderboards.',
   manifest: '/manifest.json',
-  icons: { icon: '/favicon.ico' },
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/icons/apple-touch-icon.png',
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'CricPredict',
+  },
 };
 
 export const viewport: Viewport = {
@@ -43,9 +52,15 @@ export default function RootLayout({
         {/* Preconnect to Firestore — starts TLS handshake early while JS loads */}
         <link rel="preconnect" href="https://firestore.googleapis.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://www.googleapis.com" crossOrigin="anonymous" />
+        {/* iOS PWA splash / status bar */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="CricPredict" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       </head>
       <body className="min-h-full flex flex-col">
         <Providers>
+          <ServiceWorkerRegister />
           <Navbar />
           <main className="flex-1">
             <ProfileGate>{children}</ProfileGate>

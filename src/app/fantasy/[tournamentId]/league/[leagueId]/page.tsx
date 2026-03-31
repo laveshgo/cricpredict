@@ -37,7 +37,15 @@ import {
   ChevronUp,
   ListOrdered,
   Trophy,
+  BarChart3,
+  Calendar,
+  BookOpen,
 } from 'lucide-react';
+import FantasyLeaderboard from '@/components/fantasy/FantasyLeaderboard';
+import MatchBreakdown from '@/components/fantasy/MatchBreakdown';
+import FantasyRulesGuide from '@/components/fantasy/FantasyRulesGuide';
+import AdminScoring from '@/components/fantasy/AdminScoring';
+// TournamentRefresh is now on the tournament page, not the league page
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -80,6 +88,9 @@ export default function FantasyLeaguePage() {
   const [leaving, setLeaving] = useState(false);
   const [starting, setStarting] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // ─── Completed view tab ───
+  const [completedTab, setCompletedTab] = useState<'squads' | 'leaderboard' | 'matches' | 'rules' | 'admin'>('squads');
 
   // ─── Admin settings state ───
   const [showRules, setShowRules] = useState(false);
@@ -516,10 +527,18 @@ export default function FantasyLeaguePage() {
     const totalSold = auctionState.soldPlayers.length;
     const totalUnsold = auctionState.unsoldPlayers?.length || 0;
 
+    const COMPLETED_TABS: Array<{ key: typeof completedTab; label: string; icon: React.ElementType }> = [
+      { key: 'squads', label: 'Squads', icon: Users },
+      { key: 'leaderboard', label: 'Leaderboard', icon: BarChart3 },
+      { key: 'matches', label: 'Matches', icon: Calendar },
+      { key: 'rules', label: 'Rules', icon: BookOpen },
+      ...(isAdmin ? [{ key: 'admin' as typeof completedTab, label: 'Scoring', icon: Zap }] : []),
+    ];
+
     return (
       <div className="mx-auto max-w-4xl px-4 py-6 animate-fade-in">
         {/* Header */}
-        <div className="flex items-center gap-3 mb-5">
+        <div className="flex items-center gap-3 mb-4">
           <button
             onClick={() => router.back()}
             className="w-9 h-9 rounded-lg flex items-center justify-center bg-[var(--bg-elevated)] border border-[var(--border)] hover:border-[var(--accent)] transition-colors"
@@ -535,83 +554,158 @@ export default function FantasyLeaguePage() {
           </Badge>
         </div>
 
-        {/* Squad Cards */}
-        <div className="space-y-5">
-          {sortedUsers.map(({ uid, budget, players, memberInfo }, rank) => {
-            const isMe = uid === user?.uid;
-            const foreignCount = players.filter(p => p.isForeign || foreignLookup.get(p.playerName)).length;
-
-            // Group by role
-            const byRole: Record<PlayerRole, typeof players> = { WK: [], BAT: [], AR: [], BOWL: [] };
-            players.forEach(p => byRole[p.role]?.push(p));
-
-            return (
-              <Card key={uid} className={`border overflow-hidden transition-all ${isMe ? 'border-[var(--accent)]/40 ring-1 ring-[var(--accent)]/20' : 'border-[var(--border)]'}`}>
-                {/* Card header with gradient */}
-                <div className={`px-4 py-3 border-b border-[var(--border)] ${isMe ? 'bg-[var(--accent)]/8' : 'bg-[var(--bg-elevated)]'}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${rank === 0 ? 'bg-amber-500/20 text-amber-400' : rank === 1 ? 'bg-gray-400/20 text-gray-400' : rank === 2 ? 'bg-orange-600/20 text-orange-400' : 'bg-[var(--bg-card)] text-[var(--text-muted)]'}`}>
-                        {rank + 1}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm font-bold text-[var(--text-primary)]">
-                            {memberInfo?.displayName || 'User'}
-                          </span>
-                          {isMe && <Badge className="bg-[var(--accent)]/15 text-[var(--accent)] border-0 text-[9px]">you</Badge>}
-                        </div>
-                        <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)] mt-0.5">
-                          <span>{players.length} players</span>
-                          <span>{foreignCount} overseas</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-sm font-bold text-[var(--accent)]">{budget.spent.toFixed(1)} Cr spent</div>
-                  </div>
-                </div>
-
-                {/* Players grouped by role */}
-                <CardContent className="p-0">
-                  {ROLE_ORDER.map(role => {
-                    const rolePlayers = byRole[role];
-                    if (rolePlayers.length === 0) return null;
-
-                    return (
-                      <div key={role}>
-                        {/* Role section header */}
-                        <div className="flex items-center gap-2 px-4 py-1.5 bg-[var(--bg-elevated)]/50">
-                          <span className="text-xs">{ROLE_ICONS[role]}</span>
-                          <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
-                            {ROLE_LABELS[role]} ({rolePlayers.length})
-                          </span>
-                        </div>
-                        {/* Players in this role */}
-                        <div className="divide-y divide-[var(--border)]/50">
-                          {rolePlayers.map(p => (
-                            <div key={p.playerId} className="flex items-center justify-between px-4 py-2 hover:bg-[var(--bg-elevated)]/30 transition-colors">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <Badge className={`text-[8px] font-bold px-1.5 py-0 border ${isLight ? ROLE_COLORS[p.role].light : ROLE_COLORS[p.role].dark}`}>
-                                  {p.role}
-                                </Badge>
-                                <span className="text-xs font-medium text-[var(--text-primary)] truncate">{p.playerName}</span>
-                                <span className="text-[10px] text-[var(--text-muted)] shrink-0">{p.teamShort}</span>
-                                {(p.isForeign || foreignLookup.get(p.playerName)) && (
-                                  <span className="text-xs shrink-0" title="Overseas">✈️</span>
-                                )}
-                              </div>
-                              <span className="text-xs font-bold text-[var(--accent)] shrink-0 ml-2">{p.soldPrice} Cr</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </CardContent>
-              </Card>
-            );
-          })}
+        {/* Tabs */}
+        <div className="flex gap-1 mb-5 overflow-x-auto no-scrollbar">
+          {COMPLETED_TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setCompletedTab(key)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all shrink-0 ${
+                completedTab === key
+                  ? 'bg-[var(--accent)] text-white shadow-md shadow-[var(--accent)]/25'
+                  : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] border border-[var(--border)] hover:border-[var(--accent)]/50'
+              }`}
+            >
+              <Icon size={14} />
+              {label}
+            </button>
+          ))}
         </div>
+
+        {/* Tab content */}
+        {completedTab === 'squads' && (
+          <div className="space-y-5">
+            {sortedUsers.map(({ uid, budget, players, memberInfo }, rank) => {
+              const isMe = uid === user?.uid;
+              const foreignCount = players.filter(p => p.isForeign || foreignLookup.get(p.playerName)).length;
+
+              // Group by role
+              const byRole: Record<PlayerRole, typeof players> = { WK: [], BAT: [], AR: [], BOWL: [] };
+              players.forEach(p => byRole[p.role]?.push(p));
+
+              return (
+                <Card key={uid} className={`border overflow-hidden transition-all ${isMe ? 'border-[var(--accent)]/40 ring-1 ring-[var(--accent)]/20' : 'border-[var(--border)]'}`}>
+                  {/* Card header with gradient */}
+                  <div className={`px-4 py-3 border-b border-[var(--border)] ${isMe ? 'bg-[var(--accent)]/8' : 'bg-[var(--bg-elevated)]'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${rank === 0 ? 'bg-amber-500/20 text-amber-400' : rank === 1 ? 'bg-gray-400/20 text-gray-400' : rank === 2 ? 'bg-orange-600/20 text-orange-400' : 'bg-[var(--bg-card)] text-[var(--text-muted)]'}`}>
+                          {rank + 1}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-bold text-[var(--text-primary)]">
+                              {memberInfo?.displayName || 'User'}
+                            </span>
+                            {isMe && <Badge className="bg-[var(--accent)]/15 text-[var(--accent)] border-0 text-[9px]">you</Badge>}
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] text-[var(--text-muted)] mt-0.5">
+                            <span>{players.length} players</span>
+                            <span>{foreignCount} overseas</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-sm font-bold text-[var(--accent)]">{budget.spent.toFixed(1)} Cr spent</div>
+                    </div>
+                  </div>
+
+                  {/* Players grouped by role */}
+                  <CardContent className="p-0">
+                    {ROLE_ORDER.map(role => {
+                      const rolePlayers = byRole[role];
+                      if (rolePlayers.length === 0) return null;
+
+                      return (
+                        <div key={role}>
+                          {/* Role section header */}
+                          <div className="flex items-center gap-2 px-4 py-1.5 bg-[var(--bg-elevated)]/50">
+                            <span className="text-xs">{ROLE_ICONS[role]}</span>
+                            <span className="text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+                              {ROLE_LABELS[role]} ({rolePlayers.length})
+                            </span>
+                          </div>
+                          {/* Players in this role */}
+                          <div className="divide-y divide-[var(--border)]/50">
+                            {rolePlayers.map(p => (
+                              <div key={p.playerId} className="flex items-center justify-between px-4 py-2 hover:bg-[var(--bg-elevated)]/30 transition-colors">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <Badge className={`text-[8px] font-bold px-1.5 py-0 border ${isLight ? ROLE_COLORS[p.role].light : ROLE_COLORS[p.role].dark}`}>
+                                    {p.role}
+                                  </Badge>
+                                  <span className="text-xs font-medium text-[var(--text-primary)] truncate">{p.playerName}</span>
+                                  <span className="text-[10px] text-[var(--text-muted)] shrink-0">{p.teamShort}</span>
+                                  {(p.isForeign || foreignLookup.get(p.playerName)) && (
+                                    <span className="text-xs shrink-0" title="Overseas">✈️</span>
+                                  )}
+                                </div>
+                                <span className="text-xs font-bold text-[var(--accent)] shrink-0 ml-2">{p.soldPrice} Cr</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {completedTab === 'leaderboard' && (
+          <FantasyLeaderboard
+            league={league}
+            auctionState={auctionState}
+            currentUserId={user?.uid || ''}
+            isLight={isLight}
+          />
+        )}
+
+        {completedTab === 'matches' && (
+          <MatchBreakdown
+            league={league}
+            auctionState={auctionState}
+            currentUserId={user?.uid || ''}
+            isLight={isLight}
+          />
+        )}
+
+        {completedTab === 'rules' && (
+          <FantasyRulesGuide
+            league={league}
+            auctionState={auctionState}
+            isLight={isLight}
+          />
+        )}
+
+        {completedTab === 'admin' && isAdmin && (
+          <div className="space-y-4">
+            {/* Note about tournament-level refresh */}
+            <Card className="border-[var(--border)]">
+              <CardContent className="p-4">
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  <Zap size={10} className="inline text-amber-400 mr-1" />
+                  <strong>Tournament-level refresh</strong> is available on the{' '}
+                  <a
+                    href={`/tournament/${league.tournamentId}`}
+                    className="text-[var(--accent)] underline hover:no-underline"
+                  >
+                    tournament page
+                  </a>
+                  . It fetches all match data and auto-calculates points for every league at once.
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Per-league manual match processing */}
+            <AdminScoring
+              league={league}
+              auctionState={auctionState}
+              seriesId={tournament?.cricbuzzSeriesId || '9241'}
+              isLight={isLight}
+            />
+          </div>
+        )}
       </div>
     );
   }
