@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import Providers from '@/components/layout/Providers';
-import Navbar from '@/components/layout/Navbar';
+import AppHeader from '@/components/layout/AppHeader';
+import BottomTabs from '@/components/layout/BottomTabs';
 import ProfileGate from '@/components/layout/ProfileGate';
 import ServiceWorkerRegister from '@/components/layout/ServiceWorkerRegister';
 
@@ -36,6 +37,9 @@ export const viewport: Viewport = {
   themeColor: '#0f1117',
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
@@ -58,13 +62,14 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="CricPredict" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       </head>
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col bg-[var(--bg-primary)]">
         <Providers>
           <ServiceWorkerRegister />
-          <Navbar />
-          <main className="flex-1">
+          <AppHeader />
+          <main className="flex-1 pb-20">
             <ProfileGate>{children}</ProfileGate>
           </main>
+          <BottomTabs />
         </Providers>
       </body>
     </html>
